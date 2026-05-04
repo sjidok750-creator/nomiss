@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - claude/setup-new-app-repo-PGlCj
+      - claude/review-nomiss-repo-jEJpm
   workflow_dispatch:
 
 permissions:
