@@ -59,11 +59,16 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
       updatedAt: now,
     };
 
-    await scheduleAllNotifications(reminder);
-
+    // Persist first so a notification-platform error never loses the user's data
     const reminders = [...get().reminders, reminder];
     set({ reminders });
     await saveReminders(reminders);
+
+    try {
+      await scheduleAllNotifications(reminder);
+    } catch (e) {
+      console.warn('[store] scheduleAllNotifications failed', e);
+    }
   },
 
   update: async (id, input) => {
@@ -71,12 +76,17 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
     if (!existing) return;
     const updated: Reminder = { ...existing, ...input, updatedAt: Date.now() };
 
-    await cancelAllNotificationsForReminder(id);
-    await scheduleAllNotifications(updated);
-
+    // Persist first, then schedule
     const reminders = get().reminders.map((r) => (r.id === id ? updated : r));
     set({ reminders });
     await saveReminders(reminders);
+
+    try {
+      await cancelAllNotificationsForReminder(id);
+      await scheduleAllNotifications(updated);
+    } catch (e) {
+      console.warn('[store] reschedule failed', e);
+    }
   },
 
   remove: async (id) => {

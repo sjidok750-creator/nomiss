@@ -27,6 +27,7 @@ export default function HomeScreen() {
   const reminders = useReminderStore((s) => s.reminders);
   const remove = useReminderStore((s) => s.remove);
   const [query, setQuery] = useState('');
+  const [scrollEnabled, setScrollEnabled] = useState(true);
 
   const filtered = useMemo(() => {
     const scheduled = [...reminders]
@@ -101,6 +102,7 @@ export default function HomeScreen() {
         <SectionList
           sections={sections}
           keyExtractor={(item: Reminder) => item.id}
+          scrollEnabled={scrollEnabled}
           renderItem={({ item }: { item: Reminder }) =>
             Platform.OS === 'web' ? (
               <ReminderCard
@@ -113,6 +115,8 @@ export default function HomeScreen() {
                 onPress={() => router.push({ pathname: '/reminder/[id]', params: { id: item.id } })}
                 onEdit={() => router.push({ pathname: '/reminder/[id]', params: { id: item.id, edit: '1' } })}
                 onDelete={() => handleDelete(item)}
+                onSwipeStart={() => setScrollEnabled(false)}
+                onSwipeEnd={() => setScrollEnabled(true)}
               />
             )
           }

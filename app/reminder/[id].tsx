@@ -18,7 +18,7 @@ import { Button } from '../../src/components/ui/Button';
 import { Text } from '../../src/components/ui/Text';
 import { lightTheme, darkTheme } from '../../src/design/theme';
 import { Spacing, Radius, FontSize, FontWeight } from '../../src/design/tokens';
-import { RepeatRule, NoticeType, NOTICE_OPTIONS } from '../../src/types/reminder';
+import { RepeatRule, NoticeType, SoundOption, NOTICE_OPTIONS, SOUND_OPTIONS } from '../../src/types/reminder';
 import { formatTime, formatDate } from '../../src/lib/time';
 
 // ─── Web date/time helpers ────────────────────────────────────
@@ -75,6 +75,7 @@ export default function ReminderDetailScreen() {
   const [advanceNotices, setAdvanceNotices] = useState<NoticeType[]>(
     reminder?.advanceNotices ?? ['at_time'],
   );
+  const [sound, setSound] = useState<SoundOption>(reminder?.sound ?? 'default');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -112,6 +113,7 @@ export default function ReminderDetailScreen() {
     setTriggerAt(reminder.triggerAt);
     setRepeatRule(reminder.repeatRule);
     setAdvanceNotices(reminder.advanceNotices ?? ['at_time']);
+    setSound(reminder.sound ?? 'default');
     setEditing(true);
   };
 
@@ -127,7 +129,7 @@ export default function ReminderDetailScreen() {
         triggerAt,
         repeatRule,
         advanceNotices,
-        sound: 'default',
+        sound,
       });
       if (Platform.OS !== 'web') {
         const Haptics = require('expo-haptics');
@@ -283,6 +285,41 @@ export default function ReminderDetailScreen() {
                 </View>
               </View>
 
+              {/* Sound */}
+              <View style={styles.section}>
+                <Text variant="caption" weight="semibold" color="secondary" style={styles.sectionLabel}>
+                  🔊 Sound
+                </Text>
+                <View style={styles.chipGrid}>
+                  {SOUND_OPTIONS.map((opt) => {
+                    const selected = sound === opt.value;
+                    return (
+                      <TouchableOpacity
+                        key={opt.value}
+                        onPress={() => setSound(opt.value)}
+                        activeOpacity={0.7}
+                        style={[
+                          styles.chip,
+                          {
+                            backgroundColor: selected ? theme.accent + '22' : theme.surfaceMuted,
+                            borderColor: selected ? theme.accent : theme.border,
+                          },
+                        ]}
+                      >
+                        <Text style={styles.soundEmoji}>{opt.emoji}</Text>
+                        <Text
+                          variant="caption"
+                          weight={selected ? 'semibold' : 'regular'}
+                          style={{ color: selected ? theme.accent : theme.textSecondary }}
+                        >
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
               {/* Repeat */}
               <View style={styles.section}>
                 <Text variant="caption" weight="semibold" color="secondary" style={styles.sectionLabel}>
@@ -410,6 +447,12 @@ export default function ReminderDetailScreen() {
             <Text variant="caption" weight="medium" color="secondary">{noticeLabels}</Text>
           </View>
           <View style={styles.metaRow}>
+            <Text variant="caption" color="tertiary">🔊 Sound</Text>
+            <Text variant="caption" weight="medium" color="secondary">
+              {SOUND_OPTIONS.find((o) => o.value === (reminder.sound ?? 'default'))?.label ?? 'Default'}
+            </Text>
+          </View>
+          <View style={styles.metaRow}>
             <Text variant="caption" color="tertiary">🔁 Repeat</Text>
             <Text variant="caption" weight="medium" color="secondary">
               {REPEAT_LABEL[reminder.repeatRule]}
@@ -482,12 +525,22 @@ const styles = StyleSheet.create({
   section: { gap: Spacing.sm },
   sectionLabel: { marginBottom: Spacing.xs },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+  },
   noticeChip: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: Radius.pill,
     borderWidth: 1,
   },
+  soundEmoji: { fontSize: 14 },
   repeatRow: { flexDirection: 'row', gap: Spacing.sm, flexWrap: 'wrap' },
   repeatChip: {
     paddingHorizontal: Spacing.md,

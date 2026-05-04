@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -19,11 +18,10 @@ import { Button } from '../src/components/ui/Button';
 import { Text } from '../src/components/ui/Text';
 import { lightTheme, darkTheme } from '../src/design/theme';
 import { Spacing, Radius, FontSize, FontWeight } from '../src/design/tokens';
-import { RepeatRule, NoticeType, NOTICE_OPTIONS } from '../src/types/reminder';
+import { RepeatRule, NoticeType, SoundOption, NOTICE_OPTIONS, SOUND_OPTIONS } from '../src/types/reminder';
 import { formatTime, formatDate } from '../src/lib/time';
 import { addMinutes } from 'date-fns';
 
-// ─── Web date/time helpers ───────────────────────────────────
 function toDateStr(ts: number) {
   const d = new Date(ts);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -62,9 +60,10 @@ export default function NewReminderScreen() {
   const [triggerAt, setTriggerAt] = useState(() => addMinutes(Date.now(), 10).getTime());
   const [repeatRule, setRepeatRule] = useState<RepeatRule>('none');
   const [advanceNotices, setAdvanceNotices] = useState<NoticeType[]>(['at_time']);
+  const [sound, setSound] = useState<SoundOption>('default');
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Native only pickers
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   let DateTimePicker: any = null;
@@ -79,45 +78,55 @@ export default function NewReminderScreen() {
   };
 
   const handleSave = useCallback(async () => {
+    setErrorMsg(null);
+
     if (!title.trim()) {
-      Alert.alert('Please enter a title');
+      setErrorMsg('Please enter a title');
       return;
     }
     if (advanceNotices.length === 0) {
-      Alert.alert('Please select at least one alert time');
+      setErrorMsg('Please select at least one alert time');
       return;
     }
-    if (triggerAt <= Date.now()) {
-      Alert.alert('Please select a future time');
+
+    // Auto-roll to tomorrow if the selected time is in the past (mirrors iOS Clock behavior)
+    let effectiveTriggerAt = triggerAt;
+    if (effectiveTriggerAt <= Date.now()) {
+      effectiveTriggerAt += 24 * 60 * 60 * 1000;
+    }
+    if (effectiveTriggerAt <= Date.now()) {
+      setErrorMsg('Please select a future date and time');
       return;
     }
+
     setLoading(true);
     try {
       const granted = await requestNotificationPermission();
       if (!granted && Platform.OS !== 'web') {
-        Alert.alert('Permission required', 'Please enable notifications in Settings.');
+        setErrorMsg('Notifications are disabled. Please enable them in Settings.');
         setLoading(false);
         return;
       }
       await create({
         title: title.trim(),
         body: body.trim() || undefined,
-        triggerAt,
+        triggerAt: effectiveTriggerAt,
         repeatRule,
         advanceNotices,
-        sound: 'default',
+        sound,
       });
       if (Platform.OS !== 'web') {
         const Haptics = require('expo-haptics');
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
       router.back();
-    } catch {
-      Alert.alert('Something went wrong. Please try again.');
+    } catch (e) {
+      console.error('[new] save failed', e);
+      setErrorMsg('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [title, body, triggerAt, repeatRule, advanceNotices, create]);
+  }, [title, body, triggerAt, repeatRule, advanceNotices, sound, create]);
 
   const pickerDate = new Date(triggerAt);
   const webInputStyle = {
@@ -137,7 +146,6 @@ export default function NewReminderScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* Header */}
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
             <Text variant="body" color="secondary">Cancel</Text>
@@ -147,7 +155,6 @@ export default function NewReminderScreen() {
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          {/* Time Display / Web Inputs */}
           {Platform.OS === 'web' ? (
             <View style={styles.webDateTimeSection}>
               {React.createElement('input', {
@@ -179,7 +186,6 @@ export default function NewReminderScreen() {
             </View>
           )}
 
-          {/* Quick Time Chips (native only) */}
           {Platform.OS !== 'web' && (
             <View style={styles.chipsSection}>
               <QuickTimeChips selectedTime={triggerAt} onSelect={setTriggerAt} />
@@ -187,7 +193,6 @@ export default function NewReminderScreen() {
           )}
 
           <View style={styles.formSection}>
-            {/* Title */}
             <TextInput
               value={title}
               onChangeText={setTitle}
@@ -199,16 +204,12 @@ export default function NewReminderScreen() {
               returnKeyType="next"
             />
 
-            {/* Memo */}
             <TextInput
               value={body}
               onChangeText={setBody}
               placeholder="Note (optional)"
               placeholderTextColor={theme.textTertiary}
-              style={[
-                styles.bodyInput,
-                { color: theme.textPrimary, backgroundColor: theme.surfaceMuted, borderColor: theme.border },
-              ]}
+              style={[styles.bodyInput, { color: theme.textPrimary, backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
               maxLength={300}
               multiline
               numberOfLines={3}
@@ -229,7 +230,7 @@ export default function NewReminderScreen() {
                       onPress={() => toggleNotice(opt.value)}
                       activeOpacity={0.7}
                       style={[
-                        styles.noticeChip,
+                        styles.chip,
                         {
                           backgroundColor: selected ? theme.accent + '22' : theme.surfaceMuted,
                           borderColor: selected ? theme.accent : theme.border,
@@ -249,12 +250,47 @@ export default function NewReminderScreen() {
               </View>
             </View>
 
+            {/* Sound */}
+            <View style={styles.section}>
+              <Text variant="caption" weight="semibold" color="secondary" style={styles.sectionLabel}>
+                🔊 Sound
+              </Text>
+              <View style={styles.soundRow}>
+                {SOUND_OPTIONS.map((opt) => {
+                  const selected = sound === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      onPress={() => setSound(opt.value)}
+                      activeOpacity={0.7}
+                      style={[
+                        styles.chip,
+                        {
+                          backgroundColor: selected ? theme.accent + '22' : theme.surfaceMuted,
+                          borderColor: selected ? theme.accent : theme.border,
+                        },
+                      ]}
+                    >
+                      <Text style={styles.soundEmoji}>{opt.emoji}</Text>
+                      <Text
+                        variant="caption"
+                        weight={selected ? 'semibold' : 'regular'}
+                        style={{ color: selected ? theme.accent : theme.textSecondary }}
+                      >
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
             {/* Repeat */}
             <View style={styles.section}>
               <Text variant="caption" weight="semibold" color="secondary" style={styles.sectionLabel}>
                 🔁 Repeat
               </Text>
-              <View style={styles.repeatRow}>
+              <View style={styles.chipGrid}>
                 {REPEAT_OPTIONS.map((opt) => {
                   const selected = repeatRule === opt.value;
                   return (
@@ -262,7 +298,7 @@ export default function NewReminderScreen() {
                       key={opt.value}
                       onPress={() => setRepeatRule(opt.value)}
                       style={[
-                        styles.repeatChip,
+                        styles.chip,
                         {
                           backgroundColor: selected ? theme.accent : theme.surfaceMuted,
                           borderColor: selected ? theme.accent : theme.border,
@@ -284,12 +320,13 @@ export default function NewReminderScreen() {
           </View>
         </ScrollView>
 
-        {/* Save */}
         <View style={[styles.footer, { borderTopColor: theme.border }]}>
+          {errorMsg ? (
+            <Text style={styles.errorMsg}>{errorMsg}</Text>
+          ) : null}
           <Button label="Save" onPress={handleSave} loading={loading} fullWidth size="lg" />
         </View>
 
-        {/* Native pickers */}
         {Platform.OS !== 'web' && DateTimePicker && showDatePicker && (
           <DateTimePicker
             value={pickerDate}
@@ -380,18 +417,17 @@ const styles = StyleSheet.create({
   section: { gap: Spacing.sm },
   sectionLabel: { marginBottom: Spacing.xs },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  noticeChip: {
+  soundRow: { flexDirection: 'row', gap: Spacing.sm, flexWrap: 'wrap' },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: Radius.pill,
     borderWidth: 1,
   },
-  repeatRow: { flexDirection: 'row', gap: Spacing.sm, flexWrap: 'wrap' },
-  repeatChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-  },
-  footer: { padding: Spacing.lg, borderTopWidth: 1 },
+  soundEmoji: { fontSize: 14 },
+  footer: { padding: Spacing.lg, borderTopWidth: 1, gap: Spacing.sm },
+  errorMsg: { color: '#ff3b30', textAlign: 'center', fontSize: 13 },
 });
