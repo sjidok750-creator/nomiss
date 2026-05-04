@@ -1,7 +1,13 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { RepeatRule, NoticeType, SoundOption, NOTICE_OPTIONS } from '../types/reminder';
+import { RepeatRule, NoticeType, NOTICE_OPTIONS } from '../types/reminder';
 import type { Reminder } from '../types/reminder';
+import {
+  requestWebNotificationPermission,
+  scheduleWebNotifications,
+  cancelWebNotifications,
+  cancelAllWebNotifications,
+} from './webNotifications';
 
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
@@ -26,7 +32,7 @@ export async function setupNotificationChannel() {
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {
-  if (Platform.OS === 'web') return false;
+  if (Platform.OS === 'web') return requestWebNotificationPermission();
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   if (existingStatus === 'granted') return true;
   const { status } = await Notifications.requestPermissionsAsync({
@@ -60,7 +66,10 @@ function calcNoticeTime(triggerAt: number, notice: NoticeType): number {
 }
 
 export async function scheduleAllNotifications(reminder: Reminder): Promise<void> {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web') {
+    await scheduleWebNotifications(reminder);
+    return;
+  }
 
   const sound: boolean | undefined = reminder.sound === 'silent' ? undefined : true;
 
@@ -90,7 +99,10 @@ export async function scheduleAllNotifications(reminder: Reminder): Promise<void
 }
 
 export async function cancelAllNotificationsForReminder(reminderId: string): Promise<void> {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web') {
+    cancelWebNotifications(reminderId);
+    return;
+  }
   const allNotices: NoticeType[] = [
     '1week', '3days', '1day', 'sameday_am', 'sameday_pm', '1hour', 'at_time',
   ];
@@ -102,7 +114,10 @@ export async function cancelAllNotificationsForReminder(reminderId: string): Pro
 }
 
 export async function cancelAllNotifications(): Promise<void> {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web') {
+    cancelAllWebNotifications();
+    return;
+  }
   await Notifications.cancelAllScheduledNotificationsAsync();
 }
 

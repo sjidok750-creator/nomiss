@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   SectionList,
@@ -20,6 +20,11 @@ import { lightTheme, darkTheme } from '../src/design/theme';
 import { Spacing, Radius, Colors } from '../src/design/tokens';
 import { groupRemindersByDate } from '../src/lib/time';
 import { Reminder } from '../src/types/reminder';
+import {
+  getWebPermissionState,
+  requestWebNotificationPermission,
+  unlockAudio,
+} from '../src/lib/webNotifications';
 
 export default function HomeScreen() {
   const scheme = useColorScheme();
@@ -28,6 +33,19 @@ export default function HomeScreen() {
   const remove = useReminderStore((s) => s.remove);
   const [query, setQuery] = useState('');
   const [scrollEnabled, setScrollEnabled] = useState(true);
+  const [permState, setPermState] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('unsupported');
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      setPermState(getWebPermissionState());
+    }
+  }, []);
+
+  const handleEnableAlarms = async () => {
+    const ok = await requestWebNotificationPermission();
+    unlockAudio();
+    setPermState(ok ? 'granted' : 'denied');
+  };
 
   const filtered = useMemo(() => {
     const scheduled = [...reminders]
@@ -76,6 +94,22 @@ export default function HomeScreen() {
         <Text style={[styles.appTitle, { color: theme.textPrimary }]}>nomiss</Text>
       </View>
 
+      {/* Notification permission banner (web only) */}
+      {Platform.OS === 'web' && permState === 'default' && (
+        <TouchableOpacity
+          onPress={handleEnableAlarms}
+          style={[styles.permBanner, { backgroundColor: theme.accent }]}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.permBannerText}>🔔 Tap to enable alarm notifications</Text>
+        </TouchableOpacity>
+      )}
+      {Platform.OS === 'web' && permState === 'denied' && (
+        <View style={[styles.permBanner, { backgroundColor: '#EF4444' }]}>
+          <Text style={styles.permBannerText}>🔕 Notifications blocked — allow in browser settings</Text>
+        </View>
+      )}
+
       {/* Search */}
       <View style={[styles.searchBar, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
         <Text style={styles.searchIcon}>🔍</Text>
@@ -108,6 +142,8 @@ export default function HomeScreen() {
               <ReminderCard
                 reminder={item}
                 onPress={() => router.push({ pathname: '/reminder/[id]', params: { id: item.id } })}
+                onEdit={() => router.push({ pathname: '/reminder/[id]', params: { id: item.id, edit: '1' } })}
+                onDelete={() => handleDelete(item)}
               />
             ) : (
               <SwipeableReminderCard
@@ -158,6 +194,15 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
     fontFamily: 'Plus Jakarta Sans',
   },
+  permBanner: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+  },
+  permBannerText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',

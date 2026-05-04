@@ -49,11 +49,15 @@ export const NOTICE_OPTIONS: { value: NoticeType; label: string }[] = [
   { value: 'at_time',    label: 'At reminder time' },
 ];
 
-export type SoundOption = 'default' | 'silent';
+export type SoundOption = 'default' | 'chime' | 'digital' | 'marimba' | 'bird' | 'silent';
 
 export const SOUND_OPTIONS: { value: SoundOption; label: string; emoji: string }[] = [
-  { value: 'default', label: '기본 소리', emoji: '🔔' },
-  { value: 'silent',  label: '무음 (진동)', emoji: '📳' },
+  { value: 'default', label: 'Bell',    emoji: '🔔' },
+  { value: 'chime',   label: 'Chime',   emoji: '🎐' },
+  { value: 'digital', label: 'Digital', emoji: '📟' },
+  { value: 'marimba', label: 'Marimba', emoji: '🎶' },
+  { value: 'bird',    label: 'Bird',    emoji: '🐦' },
+  { value: 'silent',  label: 'Silent',  emoji: '📳' },
 ];
 
 export interface Reminder {

@@ -5,6 +5,7 @@ import { Platform, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { setupNotificationChannel, addNotificationResponseListener } from '../src/lib/notifications';
+import { rehydrateWebNotifications } from '../src/lib/webNotifications';
 import { useReminderStore } from '../src/features/reminders/store';
 
 if (Platform.OS !== 'web') {
@@ -23,7 +24,9 @@ export default function RootLayout() {
       try {
         await setupNotificationChannel();
         await load();
-        if (Platform.OS !== 'web') {
+        if (Platform.OS === 'web') {
+          rehydrateWebNotifications();
+        } else {
           await SplashScreen.hideAsync();
         }
       } finally {
