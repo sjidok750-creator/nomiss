@@ -15,9 +15,10 @@ interface Props {
   reminder: Reminder;
   onPress: () => void;
   onLongPress?: () => void;
+  selected?: boolean;
 }
 
-export function ReminderCard({ reminder, onPress, onLongPress }: Props) {
+export function ReminderCard({ reminder, onPress, onLongPress, selected = false }: Props) {
   const scheme = useColorScheme();
   const theme = scheme === 'dark' ? darkTheme : lightTheme;
   const isFired = reminder.status === 'fired';
@@ -27,7 +28,11 @@ export function ReminderCard({ reminder, onPress, onLongPress }: Props) {
       activeOpacity={0.7}
       onPress={onPress}
       onLongPress={onLongPress}
-      style={[styles.container, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
+      style={[
+        styles.container,
+        { backgroundColor: theme.surfaceMuted, borderColor: selected ? theme.accent : theme.border },
+        selected && { borderWidth: 2 },
+      ]}
     >
       <View style={[styles.accentBar, { backgroundColor: isFired ? theme.border : theme.accent }]} />
       <View style={styles.content}>

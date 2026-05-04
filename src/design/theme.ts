@@ -40,4 +40,6 @@ export const darkTheme = {
   tabBarBorder: Colors.borderDark,
 } as const;
 
-export type Theme = typeof lightTheme;
+export type Theme = {
+  [K in keyof typeof lightTheme]: string;
+};
