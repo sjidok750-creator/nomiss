@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - claude/setup-new-app-repo-PGlCj
   workflow_dispatch:
 
 permissions:
