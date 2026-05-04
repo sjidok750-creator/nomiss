@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TouchableOpacity, Pressable, StyleSheet, useColorScheme, Platform } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, useColorScheme } from 'react-native';
 import { lightTheme, darkTheme } from '../../design/theme';
 import { Spacing, Radius, Colors } from '../../design/tokens';
 import { Text } from '../ui/Text';
@@ -10,8 +10,6 @@ interface Props {
   reminder: Reminder;
   onPress: () => void;
   noMargin?: boolean;
-  onEdit?: () => void;
-  onDelete?: () => void;
 }
 
 const REPEAT_LABEL: Record<string, string> = {
@@ -21,14 +19,15 @@ const REPEAT_LABEL: Record<string, string> = {
   none: '',
 };
 
-export function ReminderCard({ reminder, onPress, noMargin, onEdit, onDelete }: Props) {
+export function ReminderCard({ reminder, onPress, noMargin }: Props) {
   const scheme = useColorScheme();
   const theme = scheme === 'dark' ? darkTheme : lightTheme;
   const isFired = reminder.status === 'fired';
-  const showWebActions = Platform.OS === 'web' && (onEdit || onDelete);
 
   return (
-    <View
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={onPress}
       style={[
         styles.container,
         { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
@@ -36,9 +35,7 @@ export function ReminderCard({ reminder, onPress, noMargin, onEdit, onDelete }: 
       ]}
     >
       <View style={[styles.accentBar, { backgroundColor: isFired ? theme.border : Colors.accent }]} />
-
-      {/* Tappable content area */}
-      <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={styles.content}>
+      <View style={styles.content}>
         <Text
           variant="display"
           weight="bold"
@@ -72,30 +69,8 @@ export function ReminderCard({ reminder, onPress, noMargin, onEdit, onDelete }: 
             <Text variant="tiny" color="tertiary">📳</Text>
           )}
         </View>
-      </TouchableOpacity>
-
-      {/* Web: inline Edit / Delete buttons */}
-      {showWebActions && (
-        <View style={styles.webActions}>
-          {onEdit && !isFired && (
-            <Pressable
-              onPress={onEdit}
-              style={[styles.webBtn, { backgroundColor: '#3B82F6' }]}
-            >
-              <Text style={styles.webBtnText}>✏️</Text>
-            </Pressable>
-          )}
-          {onDelete && (
-            <Pressable
-              onPress={onDelete}
-              style={[styles.webBtn, { backgroundColor: Colors.danger }]}
-            >
-              <Text style={styles.webBtnText}>🗑</Text>
-            </Pressable>
-          )}
-        </View>
-      )}
-    </View>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -123,21 +98,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: Radius.pill,
   },
-  webActions: {
-    flexDirection: 'column',
-    justifyContent: 'center',
-    gap: 4,
-    paddingRight: Spacing.sm,
-    paddingVertical: Spacing.sm,
-  },
-  webBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  webBtnText: { fontSize: 16 },
   noMargin: { marginBottom: 0 },
   firedText: { textDecorationLine: 'line-through', opacity: 0.5 },
 });

@@ -14,7 +14,6 @@ import { router } from 'expo-router';
 import { useReminderStore } from '../src/features/reminders/store';
 import { EmptyState } from '../src/components/reminder/EmptyState';
 import { SwipeableReminderCard } from '../src/components/reminder/SwipeableReminderCard';
-import { ReminderCard } from '../src/components/reminder/ReminderCard';
 import { Text } from '../src/components/ui/Text';
 import { lightTheme, darkTheme } from '../src/design/theme';
 import { Spacing, Radius, Colors } from '../src/design/tokens';
@@ -137,25 +136,16 @@ export default function HomeScreen() {
           sections={sections}
           keyExtractor={(item: Reminder) => item.id}
           scrollEnabled={scrollEnabled}
-          renderItem={({ item }: { item: Reminder }) =>
-            Platform.OS === 'web' ? (
-              <ReminderCard
-                reminder={item}
-                onPress={() => router.push({ pathname: '/reminder/[id]', params: { id: item.id } })}
-                onEdit={() => router.push({ pathname: '/reminder/[id]', params: { id: item.id, edit: '1' } })}
-                onDelete={() => handleDelete(item)}
-              />
-            ) : (
-              <SwipeableReminderCard
-                reminder={item}
-                onPress={() => router.push({ pathname: '/reminder/[id]', params: { id: item.id } })}
-                onEdit={() => router.push({ pathname: '/reminder/[id]', params: { id: item.id, edit: '1' } })}
-                onDelete={() => handleDelete(item)}
-                onSwipeStart={() => setScrollEnabled(false)}
-                onSwipeEnd={() => setScrollEnabled(true)}
-              />
-            )
-          }
+          renderItem={({ item }: { item: Reminder }) => (
+            <SwipeableReminderCard
+              reminder={item}
+              onPress={() => router.push({ pathname: '/reminder/[id]', params: { id: item.id } })}
+              onEdit={() => router.push({ pathname: '/reminder/[id]', params: { id: item.id, edit: '1' } })}
+              onDelete={() => handleDelete(item)}
+              onSwipeStart={() => setScrollEnabled(false)}
+              onSwipeEnd={() => setScrollEnabled(true)}
+            />
+          )}
           renderSectionHeader={({ section }) => (
             <View style={[styles.sectionHeader, { backgroundColor: theme.surface }]}>
               <Text variant="caption" weight="semibold" color="tertiary">

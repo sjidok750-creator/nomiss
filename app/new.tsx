@@ -19,7 +19,6 @@ import { Text } from '../src/components/ui/Text';
 import { lightTheme, darkTheme } from '../src/design/theme';
 import { Spacing, Radius, FontSize, FontWeight } from '../src/design/tokens';
 import { RepeatRule, NoticeType, SoundOption, NOTICE_OPTIONS, SOUND_OPTIONS } from '../src/types/reminder';
-import { playWebSound, unlockAudio } from '../src/lib/webNotifications';
 import { formatTime, formatDate } from '../src/lib/time';
 import { addMinutes } from 'date-fns';
 
@@ -262,13 +261,7 @@ export default function NewReminderScreen() {
                   return (
                     <TouchableOpacity
                       key={opt.value}
-                      onPress={() => {
-                        setSound(opt.value);
-                        if (Platform.OS === 'web') {
-                          unlockAudio();
-                          playWebSound(opt.value);
-                        }
-                      }}
+                      onPress={() => setSound(opt.value)}
                       activeOpacity={0.7}
                       style={[
                         styles.chip,

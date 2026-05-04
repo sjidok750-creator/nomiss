@@ -1,28 +1,32 @@
 /**
- * Web-only scheduled notification system.
- * Uses browser Notification API + Web Audio API + localStorage.
- * Limitation: notifications only fire while the tab is open.
- * On iOS Safari, install as PWA (Add to Home Screen) for best results.
+ * Web notification scheduler.
+ * Uses the browser Notification API + localStorage to persist scheduled alarms.
+ *
+ * KEY LIMITATION: notifications only fire while the browser tab is open.
+ * True background alarms require a server-side push (not possible on static GitHub Pages).
+ *
+ * Sound: `new Notification()` triggers the OS notification sound automatically
+ *        (whatever the user has configured for browser notifications in phone settings).
+ *        No custom audio needed — the OS handles it.
  */
 
 import type { Reminder, NoticeType } from '../types/reminder';
 import { NOTICE_OPTIONS } from '../types/reminder';
 
-const STORAGE_KEY = 'nomiss.webScheduled.v1';
+const STORAGE_KEY = 'nomiss.scheduled.v2';
 
-// In-memory map of active setTimeout handles
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
 interface ScheduledEntry {
-  id: string;           // `${reminderId}_${noticeType}`
+  id: string;
   reminderId: string;
   title: string;
   body: string;
-  fireAt: number;       // epoch ms
-  sound: string;        // SoundOption key
+  fireAt: number;
+  silent: boolean;
 }
 
-// ─── localStorage ────────────────────────────────────────────
+// ─── Storage ──────────────────────────────────────────────────
 
 function load(): ScheduledEntry[] {
   try {
@@ -34,146 +38,32 @@ function load(): ScheduledEntry[] {
 }
 
 function save(entries: ScheduledEntry[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-  } catch {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); } catch {}
 }
 
-function remove(id: string): void {
-  save(load().filter((e) => e.id !== id));
+// ─── Permission ───────────────────────────────────────────────
+
+export async function requestWebNotificationPermission(): Promise<boolean> {
+  if (typeof window === 'undefined' || !('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  const result = await Notification.requestPermission();
+  return result === 'granted';
 }
 
-// ─── Web Audio synthesis (no external files needed) ──────────
-
-let audioCtx: AudioContext | null = null;
-
-function getAudioCtx(): AudioContext | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    if (!audioCtx || audioCtx.state === 'closed') {
-      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    return audioCtx;
-  } catch {
-    return null;
-  }
+export function getWebPermissionState(): 'granted' | 'denied' | 'default' | 'unsupported' {
+  if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
+  return Notification.permission;
 }
 
-type SoundKey = string;
-
-/**
- * Call this from a button click to unlock AudioContext (browser autoplay policy).
- */
-export function unlockAudio(): void {
-  const ctx = getAudioCtx();
-  if (ctx && ctx.state === 'suspended') {
-    ctx.resume().catch(() => {});
-  }
-}
-
-function playBell(ctx: AudioContext, startTime: number): void {
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(880, startTime);
-  osc.frequency.exponentialRampToValueAtTime(440, startTime + 1.5);
-  gain.gain.setValueAtTime(0.6, startTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, startTime + 1.8);
-  osc.start(startTime);
-  osc.stop(startTime + 2);
-}
-
-function playChime(ctx: AudioContext, startTime: number): void {
-  const freqs = [523, 659, 784, 1047];
-  freqs.forEach((freq, i) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, startTime + i * 0.18);
-    gain.gain.setValueAtTime(0, startTime + i * 0.18);
-    gain.gain.linearRampToValueAtTime(0.4, startTime + i * 0.18 + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.001, startTime + i * 0.18 + 1.2);
-    osc.start(startTime + i * 0.18);
-    osc.stop(startTime + i * 0.18 + 1.5);
-  });
-}
-
-function playDigital(ctx: AudioContext, startTime: number): void {
-  [0, 0.18, 0.36].forEach((offset) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(880, startTime + offset);
-    gain.gain.setValueAtTime(0.3, startTime + offset);
-    gain.gain.exponentialRampToValueAtTime(0.001, startTime + offset + 0.12);
-    osc.start(startTime + offset);
-    osc.stop(startTime + offset + 0.15);
-  });
-}
-
-function playMarimba(ctx: AudioContext, startTime: number): void {
-  const freqs = [523, 784];
-  freqs.forEach((freq, i) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(freq, startTime + i * 0.25);
-    gain.gain.setValueAtTime(0.5, startTime + i * 0.25);
-    gain.gain.exponentialRampToValueAtTime(0.001, startTime + i * 0.25 + 0.7);
-    osc.start(startTime + i * 0.25);
-    osc.stop(startTime + i * 0.25 + 0.8);
-  });
-}
-
-function playBird(ctx: AudioContext, startTime: number): void {
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(1500, startTime);
-  osc.frequency.setValueAtTime(1800, startTime + 0.1);
-  osc.frequency.setValueAtTime(1400, startTime + 0.2);
-  osc.frequency.setValueAtTime(1700, startTime + 0.3);
-  gain.gain.setValueAtTime(0.3, startTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.8);
-  osc.start(startTime);
-  osc.stop(startTime + 1.0);
-}
-
-export function playWebSound(soundKey: SoundKey): void {
-  if (soundKey === 'silent') return;
-  const ctx = getAudioCtx();
-  if (!ctx) return;
-  const resume = ctx.state === 'suspended' ? ctx.resume() : Promise.resolve();
-  resume.then(() => {
-    const t = ctx.currentTime + 0.05;
-    switch (soundKey) {
-      case 'default': playBell(ctx, t); break;
-      case 'chime':   playChime(ctx, t); break;
-      case 'digital': playDigital(ctx, t); break;
-      case 'marimba': playMarimba(ctx, t); break;
-      case 'bird':    playBird(ctx, t); break;
-      default:        playBell(ctx, t); break;
-    }
-  }).catch(() => {});
-}
-
-// ─── Notification firing ──────────────────────────────────────
+// ─── Firing ───────────────────────────────────────────────────
 
 function fire(entry: ScheduledEntry): void {
   timers.delete(entry.id);
-  remove(entry.id);
+  save(load().filter((e) => e.id !== entry.id));
 
-  // Visual browser notification
+  if (typeof window === 'undefined') return;
+
   if ('Notification' in window && Notification.permission === 'granted') {
     try {
       const n = new Notification(entry.title, {
@@ -181,34 +71,24 @@ function fire(entry: ScheduledEntry): void {
         tag: entry.id,
         renotify: true,
         requireInteraction: true,
-        silent: entry.sound === 'silent',
+        // silent: false → OS plays its own notification sound (phone vibrates + rings)
+        // silent: true  → no sound
+        silent: entry.silent,
       });
-      n.onclick = () => {
-        window.focus();
-        n.close();
-      };
+      n.onclick = () => { window.focus(); n.close(); };
     } catch {}
   }
-
-  // Sound (Notification.sound is not supported in any browser — must do manually)
-  playWebSound(entry.sound);
 }
 
 function arm(entry: ScheduledEntry): void {
   const delay = entry.fireAt - Date.now();
   if (delay <= 0) {
-    // Slightly past due (< 1 min): fire immediately
-    if (entry.fireAt >= Date.now() - 60_000) {
-      fire(entry);
-    }
+    // Slightly past due (within 1 min): fire immediately
+    if (entry.fireAt >= Date.now() - 60_000) fire(entry);
     return;
   }
-  // Clamp to safe setTimeout max (~24 days). Chain for longer delays.
-  const MAX = 2_100_000_000;
-  const id = setTimeout(
-    delay > MAX ? () => arm(entry) : () => fire(entry),
-    Math.min(delay, MAX),
-  );
+  const MAX = 2_100_000_000; // ~24 days max for setTimeout
+  const id = setTimeout(delay > MAX ? () => arm(entry) : () => fire(entry), Math.min(delay, MAX));
   timers.set(entry.id, id);
 }
 
@@ -217,7 +97,7 @@ function disarm(id: string): void {
   if (t !== undefined) { clearTimeout(t); timers.delete(id); }
 }
 
-// ─── Time calculation (mirrors native side) ──────────────────
+// ─── Time calculation ─────────────────────────────────────────
 
 function calcFireTime(triggerAt: number, notice: NoticeType): number {
   switch (notice) {
@@ -233,26 +113,15 @@ function calcFireTime(triggerAt: number, notice: NoticeType): number {
 
 // ─── Public API ───────────────────────────────────────────────
 
-export async function requestWebNotificationPermission(): Promise<boolean> {
-  if (typeof window === 'undefined' || !('Notification' in window)) return false;
-  if (Notification.permission === 'granted') return true;
-  if (Notification.permission === 'denied') return false;
-  const result = await Notification.requestPermission();
-  return result === 'granted';
-}
-
-export function getWebPermissionState(): 'granted' | 'denied' | 'default' | 'unsupported' {
-  if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
-  return Notification.permission;
-}
-
 export async function scheduleWebNotifications(reminder: Reminder): Promise<void> {
   if (typeof window === 'undefined') return;
 
   cancelWebNotifications(reminder.id);
+  await requestWebNotificationPermission();
 
   const now = Date.now();
   const entries = load();
+  const isSilent = reminder.sound === 'silent';
 
   for (const notice of reminder.advanceNotices) {
     const fireAt = calcFireTime(reminder.triggerAt, notice);
@@ -267,7 +136,7 @@ export async function scheduleWebNotifications(reminder: Reminder): Promise<void
       title,
       body: reminder.body ?? '',
       fireAt,
-      sound: reminder.sound ?? 'default',
+      silent: isSilent,
     };
     entries.push(entry);
     arm(entry);
@@ -278,14 +147,10 @@ export async function scheduleWebNotifications(reminder: Reminder): Promise<void
 
 export function cancelWebNotifications(reminderId: string): void {
   if (typeof window === 'undefined') return;
-  const entries = load();
   const remaining: ScheduledEntry[] = [];
-  for (const e of entries) {
-    if (e.reminderId === reminderId) {
-      disarm(e.id);
-    } else {
-      remaining.push(e);
-    }
+  for (const e of load()) {
+    if (e.reminderId === reminderId) disarm(e.id);
+    else remaining.push(e);
   }
   save(remaining);
 }
@@ -297,17 +162,19 @@ export function cancelAllWebNotifications(): void {
 }
 
 /**
- * Call once on app startup to re-arm any notifications scheduled in a previous session.
+ * Call once on app start to re-arm timers that were saved in a previous session.
  */
 export function rehydrateWebNotifications(): void {
   if (typeof window === 'undefined') return;
   const now = Date.now();
-  const entries = load();
   const live: ScheduledEntry[] = [];
-  for (const e of entries) {
-    if (e.fireAt <= now - 60_000) continue; // more than 1 min past → drop
+  for (const e of load()) {
+    if (e.fireAt <= now - 60_000) continue; // more than 1 min past → discard
     live.push(e);
     arm(e);
   }
   save(live);
 }
+
+// kept for compatibility
+export function unlockAudio(): void {}
