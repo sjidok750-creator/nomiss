@@ -30,20 +30,53 @@ export function getCategoryById(id: CategoryId): Category {
   return CATEGORIES.find((c) => c.id === id) ?? CATEGORIES[0];
 }
 
+export type NoticeType =
+  | '1week'
+  | '3days'
+  | '1day'
+  | 'sameday_am'
+  | 'sameday_pm'
+  | '1hour'
+  | 'at_time';
+
+export const NOTICE_OPTIONS: { value: NoticeType; label: string }[] = [
+  { value: '1week',      label: '1주일 전' },
+  { value: '3days',      label: '3일 전' },
+  { value: '1day',       label: '하루 전' },
+  { value: 'sameday_am', label: '당일 오전 9시' },
+  { value: 'sameday_pm', label: '당일 오후 2시' },
+  { value: '1hour',      label: '1시간 전' },
+  { value: 'at_time',    label: '정각' },
+];
+
+export type SoundOption = 'default' | 'silent';
+
+export const SOUND_OPTIONS: { value: SoundOption; label: string; emoji: string }[] = [
+  { value: 'default', label: '기본 소리', emoji: '🔔' },
+  { value: 'silent',  label: '무음 (진동)', emoji: '📳' },
+];
+
 export interface Reminder {
   id: string;
   title: string;
   body?: string;
-  triggerAt: number; // epoch ms
+  triggerAt: number;
   repeatRule: RepeatRule;
   categoryId: CategoryId;
+  advanceNotices: NoticeType[];
+  sound: SoundOption;
   status: 'scheduled' | 'fired' | 'cancelled';
   createdAt: number;
   updatedAt: number;
 }
 
-export type CreateReminderInput = Pick<
-  Reminder,
-  'title' | 'body' | 'triggerAt' | 'repeatRule' | 'categoryId'
->;
+export type CreateReminderInput = {
+  title: string;
+  body?: string;
+  triggerAt: number;
+  repeatRule: RepeatRule;
+  advanceNotices: NoticeType[];
+  sound: SoundOption;
+};
+
 export type UpdateReminderInput = Partial<CreateReminderInput>;

@@ -11,18 +11,43 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useReminderStore } from '../../src/features/reminders/store';
 import { QuickTimeChips } from '../../src/components/form/QuickTimeChips';
-import { CategoryPicker } from '../../src/components/form/CategoryPicker';
 import { Button } from '../../src/components/ui/Button';
 import { Text } from '../../src/components/ui/Text';
 import { lightTheme, darkTheme } from '../../src/design/theme';
 import { Spacing, Radius, FontSize, FontWeight } from '../../src/design/tokens';
-import { RepeatRule, CategoryId, getCategoryById } from '../../src/types/reminder';
+import {
+  RepeatRule,
+  NoticeType,
+  SoundOption,
+  NOTICE_OPTIONS,
+  SOUND_OPTIONS,
+} from '../../src/types/reminder';
 import { formatTime, formatDate } from '../../src/lib/time';
+
+// ─── Web date/time helpers ───────────────────────────────────
+function toDateStr(ts: number) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function toTimeStr(ts: number) {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+function applyDateStr(dateStr: string, ts: number): number {
+  const d = new Date(ts);
+  const [y, m, day] = dateStr.split('-').map(Number);
+  d.setFullYear(y, m - 1, day);
+  return d.getTime();
+}
+function applyTimeStr(timeStr: string, ts: number): number {
+  const d = new Date(ts);
+  const [h, min] = timeStr.split(':').map(Number);
+  d.setHours(h, min, 0, 0);
+  return d.getTime();
+}
 
 const REPEAT_OPTIONS: { label: string; value: RepeatRule }[] = [
   { label: '안 함', value: 'none' },
@@ -53,11 +78,19 @@ export default function ReminderDetailScreen() {
   const [body, setBody] = useState(reminder?.body ?? '');
   const [triggerAt, setTriggerAt] = useState(reminder?.triggerAt ?? Date.now());
   const [repeatRule, setRepeatRule] = useState<RepeatRule>(reminder?.repeatRule ?? 'none');
-  const [categoryId, setCategoryId] = useState<CategoryId>(reminder?.categoryId ?? 'default');
+  const [advanceNotices, setAdvanceNotices] = useState<NoticeType[]>(
+    reminder?.advanceNotices ?? ['at_time'],
+  );
+  const [sound, setSound] = useState<SoundOption>(reminder?.sound ?? 'default');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  let DateTimePicker: any = null;
+  if (Platform.OS !== 'web') {
+    DateTimePicker = require('@react-native-community/datetimepicker').default;
+  }
 
   if (!reminder) {
     return (
@@ -74,26 +107,26 @@ export default function ReminderDetailScreen() {
   const isCancelled = reminder.status === 'cancelled';
   const isEditable = !isFired && !isCancelled;
 
+  const toggleNotice = (notice: NoticeType) => {
+    setAdvanceNotices((prev) =>
+      prev.includes(notice) ? prev.filter((n) => n !== notice) : [...prev, notice],
+    );
+  };
+
   const handleStartEdit = () => {
     setTitle(reminder.title);
     setBody(reminder.body ?? '');
     setTriggerAt(reminder.triggerAt);
     setRepeatRule(reminder.repeatRule);
-    setCategoryId(reminder.categoryId ?? 'default');
+    setAdvanceNotices(reminder.advanceNotices ?? ['at_time']);
+    setSound(reminder.sound ?? 'default');
     setEditing(true);
   };
 
-  const handleCancelEdit = () => setEditing(false);
-
   const handleSave = useCallback(async () => {
-    if (!title.trim()) {
-      Alert.alert('제목을 입력해주세요');
-      return;
-    }
-    if (triggerAt <= Date.now()) {
-      Alert.alert('미래의 시간을 선택해주세요');
-      return;
-    }
+    if (!title.trim()) { Alert.alert('제목을 입력해주세요'); return; }
+    if (advanceNotices.length === 0) { Alert.alert('알림 시점을 하나 이상 선택해주세요'); return; }
+    if (triggerAt <= Date.now()) { Alert.alert('미래의 시간을 선택해주세요'); return; }
     setSaving(true);
     try {
       await update(reminder.id, {
@@ -101,46 +134,59 @@ export default function ReminderDetailScreen() {
         body: body.trim() || undefined,
         triggerAt,
         repeatRule,
-        categoryId,
+        advanceNotices,
+        sound,
       });
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (Platform.OS !== 'web') {
+        const Haptics = require('expo-haptics');
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
       setEditing(false);
     } catch {
       Alert.alert('저장 중 오류가 발생했어요. 다시 시도해주세요.');
     } finally {
       setSaving(false);
     }
-  }, [title, body, triggerAt, repeatRule, reminder.id, update]);
+  }, [title, body, triggerAt, repeatRule, advanceNotices, sound, reminder.id, update]);
 
   const handleDelete = useCallback(() => {
-    Alert.alert(
-      '알림 삭제',
-      `"${reminder.title}" 알림을 삭제할까요?`,
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '삭제',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting(true);
-            await remove(reminder.id);
+    Alert.alert('알림 삭제', `"${reminder.title}" 알림을 삭제할까요?`, [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          setDeleting(true);
+          await remove(reminder.id);
+          if (Platform.OS !== 'web') {
+            const Haptics = require('expo-haptics');
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            router.back();
-          },
+          }
+          router.back();
         },
-      ],
-    );
+      },
+    ]);
   }, [reminder, remove]);
 
   const pickerDate = new Date(triggerAt);
+  const webInputStyle = {
+    fontSize: 16,
+    padding: '8px 14px',
+    borderRadius: 20,
+    border: `1px solid ${theme.border}`,
+    backgroundColor: theme.surfaceMuted,
+    color: theme.textPrimary,
+    outline: 'none',
+    cursor: 'pointer',
+  } as any;
 
-  // ─── Edit Mode ──────────────────────────────────────────────
+  // ─── Edit Mode ───────────────────────────────────────────────
   if (editing) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.surface }]}>
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={[styles.header, { borderBottomColor: theme.border }]}>
-            <TouchableOpacity onPress={handleCancelEdit} hitSlop={12}>
+            <TouchableOpacity onPress={() => setEditing(false)} hitSlop={12}>
               <Text variant="body" color="secondary">취소</Text>
             </TouchableOpacity>
             <Text variant="heading" weight="semibold">알림 편집</Text>
@@ -152,23 +198,42 @@ export default function ReminderDetailScreen() {
           </View>
 
           <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-            {/* Time Display */}
-            <View style={styles.timeSection}>
-              <TouchableOpacity onPress={() => setShowTimePicker(true)} activeOpacity={0.7}>
-                <Text style={styles.timeDisplay} weight="bold">{formatTime(triggerAt)}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setShowDatePicker(true)}
-                activeOpacity={0.7}
-                style={[styles.dateBadge, { backgroundColor: theme.surfaceMuted }]}
-              >
-                <Text variant="body" color="secondary">{formatDate(triggerAt)}</Text>
-              </TouchableOpacity>
-            </View>
+            {Platform.OS === 'web' ? (
+              <View style={styles.webDateTimeSection}>
+                {React.createElement('input', {
+                  type: 'date',
+                  value: toDateStr(triggerAt),
+                  min: toDateStr(Date.now()),
+                  onChange: (e: any) => setTriggerAt(applyDateStr(e.target.value, triggerAt)),
+                  style: webInputStyle,
+                })}
+                {React.createElement('input', {
+                  type: 'time',
+                  value: toTimeStr(triggerAt),
+                  onChange: (e: any) => setTriggerAt(applyTimeStr(e.target.value, triggerAt)),
+                  style: webInputStyle,
+                })}
+              </View>
+            ) : (
+              <View style={styles.timeSection}>
+                <TouchableOpacity onPress={() => setShowTimePicker(true)} activeOpacity={0.7}>
+                  <Text style={styles.timeDisplay} weight="bold">{formatTime(triggerAt)}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setShowDatePicker(true)}
+                  activeOpacity={0.7}
+                  style={[styles.dateBadge, { backgroundColor: theme.surfaceMuted }]}
+                >
+                  <Text variant="body" color="secondary">{formatDate(triggerAt)}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-            <View style={styles.chipsSection}>
-              <QuickTimeChips selectedTime={triggerAt} onSelect={setTriggerAt} />
-            </View>
+            {Platform.OS !== 'web' && (
+              <View style={styles.chipsSection}>
+                <QuickTimeChips selectedTime={triggerAt} onSelect={setTriggerAt} />
+              </View>
+            )}
 
             <View style={styles.formSection}>
               <TextInput
@@ -185,56 +250,120 @@ export default function ReminderDetailScreen() {
                 onChangeText={setBody}
                 placeholder="메모 (선택)"
                 placeholderTextColor={theme.textTertiary}
-                style={[
-                  styles.bodyInput,
-                  { color: theme.textPrimary, backgroundColor: theme.surfaceMuted, borderColor: theme.border },
-                ]}
+                style={[styles.bodyInput, { color: theme.textPrimary, backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
                 maxLength={300}
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
               />
-              <View style={styles.repeatSection}>
-                <Text variant="caption" weight="semibold" color="secondary">카테고리</Text>
-                <CategoryPicker selected={categoryId} onSelect={setCategoryId} />
+
+              {/* 알림 시점 */}
+              <View style={styles.section}>
+                <Text variant="caption" weight="semibold" color="secondary" style={styles.sectionLabel}>
+                  🔔 알림 시점
+                </Text>
+                <View style={styles.chipGrid}>
+                  {NOTICE_OPTIONS.map((opt) => {
+                    const selected = advanceNotices.includes(opt.value);
+                    return (
+                      <TouchableOpacity
+                        key={opt.value}
+                        onPress={() => toggleNotice(opt.value)}
+                        activeOpacity={0.7}
+                        style={[
+                          styles.noticeChip,
+                          {
+                            backgroundColor: selected ? theme.accent + '22' : theme.surfaceMuted,
+                            borderColor: selected ? theme.accent : theme.border,
+                          },
+                        ]}
+                      >
+                        <Text
+                          variant="caption"
+                          weight={selected ? 'semibold' : 'regular'}
+                          style={{ color: selected ? theme.accent : theme.textSecondary }}
+                        >
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
 
-              <View style={styles.repeatSection}>
-                <Text variant="caption" weight="semibold" color="secondary">반복</Text>
-                <View style={styles.repeatRow}>
-                  {REPEAT_OPTIONS.map((opt) => (
-                    <TouchableOpacity
-                      key={opt.value}
-                      onPress={() => setRepeatRule(opt.value)}
-                      style={[
-                        styles.repeatChip,
-                        {
-                          backgroundColor: repeatRule === opt.value ? theme.accent : theme.surfaceMuted,
-                          borderColor: repeatRule === opt.value ? theme.accent : theme.border,
-                        },
-                      ]}
-                    >
-                      <Text
-                        variant="caption"
-                        weight="medium"
-                        style={{ color: repeatRule === opt.value ? '#fff' : theme.textSecondary }}
+              {/* 소리 */}
+              <View style={styles.section}>
+                <Text variant="caption" weight="semibold" color="secondary" style={styles.sectionLabel}>
+                  🔊 소리
+                </Text>
+                <View style={styles.soundRow}>
+                  {SOUND_OPTIONS.map((opt) => {
+                    const selected = sound === opt.value;
+                    return (
+                      <TouchableOpacity
+                        key={opt.value}
+                        onPress={() => setSound(opt.value)}
+                        activeOpacity={0.7}
+                        style={[
+                          styles.soundChip,
+                          {
+                            backgroundColor: selected ? theme.accent + '22' : theme.surfaceMuted,
+                            borderColor: selected ? theme.accent : theme.border,
+                          },
+                        ]}
                       >
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        <Text style={styles.soundEmoji}>{opt.emoji}</Text>
+                        <Text
+                          variant="caption"
+                          weight={selected ? 'semibold' : 'regular'}
+                          style={{ color: selected ? theme.accent : theme.textSecondary }}
+                        >
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* 반복 */}
+              <View style={styles.section}>
+                <Text variant="caption" weight="semibold" color="secondary" style={styles.sectionLabel}>
+                  🔁 반복
+                </Text>
+                <View style={styles.repeatRow}>
+                  {REPEAT_OPTIONS.map((opt) => {
+                    const selected = repeatRule === opt.value;
+                    return (
+                      <TouchableOpacity
+                        key={opt.value}
+                        onPress={() => setRepeatRule(opt.value)}
+                        style={[
+                          styles.repeatChip,
+                          {
+                            backgroundColor: selected ? theme.accent : theme.surfaceMuted,
+                            borderColor: selected ? theme.accent : theme.border,
+                          },
+                        ]}
+                      >
+                        <Text variant="caption" weight="medium" style={{ color: selected ? '#fff' : theme.textSecondary }}>
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
             </View>
           </ScrollView>
 
-          {showDatePicker && (
+          {Platform.OS !== 'web' && DateTimePicker && showDatePicker && (
             <DateTimePicker
               value={pickerDate}
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               minimumDate={new Date()}
-              onChange={(_, date) => {
+              onChange={(_: any, date?: Date) => {
                 setShowDatePicker(false);
                 if (date) {
                   const next = new Date(triggerAt);
@@ -244,12 +373,12 @@ export default function ReminderDetailScreen() {
               }}
             />
           )}
-          {showTimePicker && (
+          {Platform.OS !== 'web' && DateTimePicker && showTimePicker && (
             <DateTimePicker
               value={pickerDate}
               mode="time"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={(_, date) => {
+              onChange={(_: any, date?: Date) => {
                 setShowTimePicker(false);
                 if (date) {
                   const next = new Date(triggerAt);
@@ -264,7 +393,11 @@ export default function ReminderDetailScreen() {
     );
   }
 
-  // ─── View Mode ──────────────────────────────────────────────
+  // ─── View Mode ───────────────────────────────────────────────
+  const noticeLabels = (reminder.advanceNotices ?? ['at_time'])
+    .map((n) => NOTICE_OPTIONS.find((o) => o.value === n)?.label ?? n)
+    .join(' · ');
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.surface }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -281,7 +414,7 @@ export default function ReminderDetailScreen() {
         )}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scrollView}>
         {(isFired || isCancelled) && (
           <View style={[styles.statusBadge, { backgroundColor: theme.surfaceMuted }]}>
             <Text variant="caption" color="tertiary" weight="medium">
@@ -312,21 +445,21 @@ export default function ReminderDetailScreen() {
               {reminder.body}
             </Text>
           ) : null}
+
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
-          {(() => {
-            const cat = getCategoryById(reminder.categoryId ?? 'default');
-            return (
-              <View style={styles.metaRow}>
-                <Text variant="caption" color="tertiary">카테고리</Text>
-                <View style={[styles.catBadge, { backgroundColor: cat.color + '22' }]}>
-                  <Text style={{ fontSize: 12 }}>{cat.emoji}</Text>
-                  <Text variant="caption" weight="medium" style={{ color: cat.color }}>{cat.label}</Text>
-                </View>
-              </View>
-            );
-          })()}
+
           <View style={styles.metaRow}>
-            <Text variant="caption" color="tertiary">반복</Text>
+            <Text variant="caption" color="tertiary">🔔 알림 시점</Text>
+            <Text variant="caption" weight="medium" color="secondary">{noticeLabels}</Text>
+          </View>
+          <View style={styles.metaRow}>
+            <Text variant="caption" color="tertiary">🔊 소리</Text>
+            <Text variant="caption" weight="medium" color="secondary">
+              {SOUND_OPTIONS.find((o) => o.value === (reminder.sound ?? 'default'))?.label}
+            </Text>
+          </View>
+          <View style={styles.metaRow}>
+            <Text variant="caption" color="tertiary">🔁 반복</Text>
             <Text variant="caption" weight="medium" color="secondary">
               {REPEAT_LABEL[reminder.repeatRule]}
             </Text>
@@ -361,7 +494,8 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
   },
-  scroll: { padding: Spacing.lg, gap: Spacing.xl },
+  scroll: { paddingBottom: Spacing.huge },
+  scrollView: { padding: Spacing.lg, gap: Spacing.xl },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.lg },
   statusBadge: {
     alignSelf: 'flex-start',
@@ -369,18 +503,18 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs,
     borderRadius: Radius.pill,
   },
+  webDateTimeSection: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: Spacing.xxl,
+    gap: Spacing.md,
+  },
   timeSection: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl },
   timeDisplay: { fontSize: FontSize.displayXl, fontWeight: FontWeight.bold, lineHeight: 76 },
   dateBadge: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: Radius.pill },
-  card: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.lg, gap: Spacing.md },
-  bodyText: { lineHeight: 22 },
-  divider: { height: 1, marginVertical: Spacing.xs },
-  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  catBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: Radius.pill },
-  footer: { padding: Spacing.lg, borderTopWidth: 1 },
-  firedText: { textDecorationLine: 'line-through', opacity: 0.5 },
   chipsSection: { paddingBottom: Spacing.xl },
-  formSection: { paddingHorizontal: Spacing.lg, gap: Spacing.lg },
+  formSection: { paddingHorizontal: Spacing.lg, gap: Spacing.xl },
   titleInput: {
     fontSize: FontSize.title,
     fontWeight: FontWeight.medium,
@@ -394,7 +528,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     minHeight: 80,
   },
-  repeatSection: { gap: Spacing.sm },
+  section: { gap: Spacing.sm },
+  sectionLabel: { marginBottom: Spacing.xs },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  noticeChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+  },
+  soundRow: { flexDirection: 'row', gap: Spacing.sm },
+  soundChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+  },
+  soundEmoji: { fontSize: 14 },
   repeatRow: { flexDirection: 'row', gap: Spacing.sm, flexWrap: 'wrap' },
   repeatChip: {
     paddingHorizontal: Spacing.md,
@@ -402,4 +555,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     borderWidth: 1,
   },
+  card: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.lg, gap: Spacing.md },
+  bodyText: { lineHeight: 22 },
+  divider: { height: 1, marginVertical: Spacing.xs },
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  footer: { padding: Spacing.lg, borderTopWidth: 1 },
+  firedText: { textDecorationLine: 'line-through', opacity: 0.5 },
 });

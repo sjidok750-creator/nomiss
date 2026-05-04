@@ -1,16 +1,19 @@
 import { create } from 'zustand';
 import { Reminder, CreateReminderInput, UpdateReminderInput } from '../../types/reminder';
 import { loadReminders, saveReminders } from '../../lib/storage';
-import { scheduleNotification, cancelNotification } from '../../lib/notifications';
+import { scheduleAllNotifications, cancelAllNotificationsForReminder } from '../../lib/notifications';
 
 function generateId(): string {
   return `reminder_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-// 기존 데이터에 categoryId 없는 경우 'default' 부여
-function migrate(r: Reminder): Reminder {
-  if (!r.categoryId) return { ...r, categoryId: 'default' };
-  return r;
+function migrate(r: any): Reminder {
+  return {
+    ...r,
+    categoryId: r.categoryId ?? 'default',
+    advanceNotices: r.advanceNotices ?? ['at_time'],
+    sound: r.sound ?? 'default',
+  };
 }
 
 interface ReminderStore {
@@ -48,13 +51,15 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
       body: input.body,
       triggerAt: input.triggerAt,
       repeatRule: input.repeatRule,
-      categoryId: input.categoryId ?? 'default',
+      categoryId: 'default',
+      advanceNotices: input.advanceNotices,
+      sound: input.sound,
       status: 'scheduled',
       createdAt: now,
       updatedAt: now,
     };
 
-    await scheduleNotification(reminder.id, reminder.title, reminder.body, reminder.triggerAt, reminder.repeatRule);
+    await scheduleAllNotifications(reminder);
 
     const reminders = [...get().reminders, reminder];
     set({ reminders });
@@ -66,8 +71,8 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
     if (!existing) return;
     const updated: Reminder = { ...existing, ...input, updatedAt: Date.now() };
 
-    await cancelNotification(id);
-    await scheduleNotification(updated.id, updated.title, updated.body, updated.triggerAt, updated.repeatRule);
+    await cancelAllNotificationsForReminder(id);
+    await scheduleAllNotifications(updated);
 
     const reminders = get().reminders.map((r) => (r.id === id ? updated : r));
     set({ reminders });
@@ -75,7 +80,7 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
   },
 
   remove: async (id) => {
-    await cancelNotification(id);
+    await cancelAllNotificationsForReminder(id);
     const reminders = get().reminders.filter((r) => r.id !== id);
     set({ reminders });
     await saveReminders(reminders);

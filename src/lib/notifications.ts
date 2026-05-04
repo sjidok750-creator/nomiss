@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { RepeatRule } from '../types/reminder';
+import { RepeatRule, NoticeType, SoundOption, NOTICE_OPTIONS } from '../types/reminder';
+import type { Reminder } from '../types/reminder';
 
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
@@ -28,40 +29,76 @@ export async function requestNotificationPermission(): Promise<boolean> {
   if (Platform.OS === 'web') return false;
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   if (existingStatus === 'granted') return true;
-
   const { status } = await Notifications.requestPermissionsAsync({
     ios: { allowAlert: true, allowBadge: false, allowSound: true },
   });
   return status === 'granted';
 }
 
-export async function scheduleNotification(
-  id: string,
-  title: string,
-  body: string | undefined,
-  triggerAt: number,
-  repeatRule: RepeatRule,
-): Promise<string> {
-  if (Platform.OS === 'web') return id;
-  const trigger = buildTrigger(triggerAt, repeatRule);
-
-  await Notifications.scheduleNotificationAsync({
-    identifier: id,
-    content: {
-      title,
-      body: body ?? '',
-      data: { reminderId: id },
-      sound: 'default',
-    },
-    trigger,
-  });
-
-  return id;
+function noticeId(reminderId: string, notice: NoticeType): string {
+  return `${reminderId}_${notice}`;
 }
 
-export async function cancelNotification(id: string): Promise<void> {
+function calcNoticeTime(triggerAt: number, notice: NoticeType): number {
+  switch (notice) {
+    case 'at_time':    return triggerAt;
+    case '1hour':      return triggerAt - 60 * 60 * 1000;
+    case '1day':       return triggerAt - 24 * 60 * 60 * 1000;
+    case '3days':      return triggerAt - 3 * 24 * 60 * 60 * 1000;
+    case '1week':      return triggerAt - 7 * 24 * 60 * 60 * 1000;
+    case 'sameday_am': {
+      const d = new Date(triggerAt);
+      d.setHours(9, 0, 0, 0);
+      return d.getTime();
+    }
+    case 'sameday_pm': {
+      const d = new Date(triggerAt);
+      d.setHours(14, 0, 0, 0);
+      return d.getTime();
+    }
+  }
+}
+
+export async function scheduleAllNotifications(reminder: Reminder): Promise<void> {
   if (Platform.OS === 'web') return;
-  await Notifications.cancelScheduledNotificationAsync(id);
+
+  const sound: string | undefined = reminder.sound === 'silent' ? undefined : 'default';
+
+  for (const notice of reminder.advanceNotices) {
+    const noticeTime = calcNoticeTime(reminder.triggerAt, notice);
+    if (noticeTime <= Date.now()) continue;
+
+    const label = NOTICE_OPTIONS.find((o) => o.value === notice)?.label;
+    const noticeTitle =
+      notice === 'at_time' ? reminder.title : `[${label}] ${reminder.title}`;
+
+    try {
+      await Notifications.scheduleNotificationAsync({
+        identifier: noticeId(reminder.id, notice),
+        content: {
+          title: noticeTitle,
+          body: reminder.body ?? '',
+          data: { reminderId: reminder.id },
+          sound,
+        },
+        trigger: buildTrigger(noticeTime, reminder.repeatRule),
+      });
+    } catch {
+      // skip if past time for repeating triggers
+    }
+  }
+}
+
+export async function cancelAllNotificationsForReminder(reminderId: string): Promise<void> {
+  if (Platform.OS === 'web') return;
+  const allNotices: NoticeType[] = [
+    '1week', '3days', '1day', 'sameday_am', 'sameday_pm', '1hour', 'at_time',
+  ];
+  await Promise.all(
+    allNotices.map((n) =>
+      Notifications.cancelScheduledNotificationAsync(noticeId(reminderId, n)).catch(() => {}),
+    ),
+  );
 }
 
 export async function cancelAllNotifications(): Promise<void> {
@@ -99,7 +136,6 @@ function buildTrigger(
       minute: date.getMinutes(),
     };
   }
-
   if (repeatRule === 'weekly') {
     return {
       type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
@@ -108,7 +144,6 @@ function buildTrigger(
       minute: date.getMinutes(),
     };
   }
-
   if (repeatRule === 'monthly') {
     return {
       type: Notifications.SchedulableTriggerInputTypes.MONTHLY,
@@ -117,9 +152,5 @@ function buildTrigger(
       minute: date.getMinutes(),
     };
   }
-
-  return {
-    type: Notifications.SchedulableTriggerInputTypes.DATE,
-    date,
-  };
+  return { type: Notifications.SchedulableTriggerInputTypes.DATE, date };
 }
