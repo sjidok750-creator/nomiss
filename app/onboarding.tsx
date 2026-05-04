@@ -4,7 +4,7 @@ import {
   StyleSheet,
   useColorScheme,
   TouchableOpacity,
-  Dimensions,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -17,8 +17,6 @@ import { lightTheme, darkTheme } from '../src/design/theme';
 import { Spacing, Radius, Colors } from '../src/design/tokens';
 
 export const ONBOARDING_KEY = '@nomiss/onboarding_done';
-
-const { width } = Dimensions.get('window');
 
 const PAGES = [
   {
@@ -47,7 +45,7 @@ export default function OnboardingScreen() {
 
   const handleNext = () => {
     if (!isLast) {
-      Haptics.selectionAsync();
+      if (Platform.OS !== 'web') Haptics.selectionAsync();
       setPage((p) => p + 1);
     }
   };
@@ -56,7 +54,7 @@ export default function OnboardingScreen() {
     setLoading(true);
     await requestNotificationPermission();
     await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (Platform.OS !== 'web') await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.replace('/');
   };
 

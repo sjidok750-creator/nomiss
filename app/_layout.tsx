@@ -1,22 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, router, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform, useColorScheme } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
-import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setupNotificationChannel, addNotificationResponseListener } from '../src/lib/notifications';
 import { useReminderStore } from '../src/features/reminders/store';
 import { ONBOARDING_KEY } from './onboarding';
-import 'react-native-reanimated';
 
 if (Platform.OS !== 'web') {
+  require('react-native-reanimated');
   SplashScreen.preventAutoHideAsync();
 }
 
 export default function RootLayout() {
   const scheme = useColorScheme();
   const load = useReminderStore((s) => s.load);
+  const pathname = usePathname();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -28,7 +29,7 @@ export default function RootLayout() {
         if (Platform.OS !== 'web') {
           await SplashScreen.hideAsync();
         }
-        if (!done) {
+        if (!done && pathname !== '/onboarding') {
           router.replace('/onboarding');
         }
       } finally {
@@ -48,7 +49,7 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <>
+    <SafeAreaProvider>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -57,6 +58,6 @@ export default function RootLayout() {
         <Stack.Screen name="new" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="reminder/[id]" options={{ presentation: 'modal', headerShown: false }} />
       </Stack>
-    </>
+    </SafeAreaProvider>
   );
 }
