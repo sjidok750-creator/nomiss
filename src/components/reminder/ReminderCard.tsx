@@ -12,9 +12,9 @@ interface Props {
 }
 
 const REPEAT_LABEL: Record<string, string> = {
-  daily: '매일',
-  weekly: '매주',
-  monthly: '매월',
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
   none: '',
 };
 

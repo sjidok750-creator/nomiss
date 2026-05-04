@@ -40,13 +40,13 @@ export type NoticeType =
   | 'at_time';
 
 export const NOTICE_OPTIONS: { value: NoticeType; label: string }[] = [
-  { value: '1week',      label: '1주일 전' },
-  { value: '3days',      label: '3일 전' },
-  { value: '1day',       label: '하루 전' },
-  { value: 'sameday_am', label: '당일 오전 9시' },
-  { value: 'sameday_pm', label: '당일 오후 2시' },
-  { value: '1hour',      label: '1시간 전' },
-  { value: 'at_time',    label: '정각' },
+  { value: '1week',      label: '1 week before' },
+  { value: '3days',      label: '3 days before' },
+  { value: '1day',       label: '1 day before' },
+  { value: 'sameday_am', label: 'Same day 9am' },
+  { value: 'sameday_pm', label: 'Same day 2pm' },
+  { value: '1hour',      label: '1 hour before' },
+  { value: 'at_time',    label: 'At reminder time' },
 ];
 
 export type SoundOption = 'default' | 'silent';

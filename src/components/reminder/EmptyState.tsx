@@ -13,12 +13,12 @@ export function EmptyState({ onAdd }: Props) {
     <View style={styles.container}>
       <Text variant="display" style={styles.emoji}>🔔</Text>
       <Text variant="title" weight="semibold" style={styles.title}>
-        알림이 없어요
+        No reminders yet
       </Text>
       <Text variant="body" color="secondary" style={styles.desc}>
-        잊고 싶지 않은 일을{'\n'}지금 바로 등록해보세요
+        Add something you never want to miss
       </Text>
-      <Button label="첫 알림 만들기" onPress={onAdd} size="lg" style={styles.button} />
+      <Button label="Add Reminder" onPress={onAdd} size="lg" style={styles.button} />
     </View>
   );
 }

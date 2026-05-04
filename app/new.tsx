@@ -19,7 +19,7 @@ import { Button } from '../src/components/ui/Button';
 import { Text } from '../src/components/ui/Text';
 import { lightTheme, darkTheme } from '../src/design/theme';
 import { Spacing, Radius, FontSize, FontWeight } from '../src/design/tokens';
-import { RepeatRule, NoticeType, SoundOption, NOTICE_OPTIONS, SOUND_OPTIONS } from '../src/types/reminder';
+import { RepeatRule, NoticeType, NOTICE_OPTIONS } from '../src/types/reminder';
 import { formatTime, formatDate } from '../src/lib/time';
 import { addMinutes } from 'date-fns';
 
@@ -46,10 +46,10 @@ function applyTimeStr(timeStr: string, ts: number): number {
 }
 
 const REPEAT_OPTIONS: { label: string; value: RepeatRule }[] = [
-  { label: '안 함', value: 'none' },
-  { label: '매일', value: 'daily' },
-  { label: '매주', value: 'weekly' },
-  { label: '매월', value: 'monthly' },
+  { label: 'Never', value: 'none' },
+  { label: 'Daily', value: 'daily' },
+  { label: 'Weekly', value: 'weekly' },
+  { label: 'Monthly', value: 'monthly' },
 ];
 
 export default function NewReminderScreen() {
@@ -62,7 +62,6 @@ export default function NewReminderScreen() {
   const [triggerAt, setTriggerAt] = useState(() => addMinutes(Date.now(), 10).getTime());
   const [repeatRule, setRepeatRule] = useState<RepeatRule>('none');
   const [advanceNotices, setAdvanceNotices] = useState<NoticeType[]>(['at_time']);
-  const [sound, setSound] = useState<SoundOption>('default');
   const [loading, setLoading] = useState(false);
 
   // Native only pickers
@@ -81,37 +80,44 @@ export default function NewReminderScreen() {
 
   const handleSave = useCallback(async () => {
     if (!title.trim()) {
-      Alert.alert('제목을 입력해주세요');
+      Alert.alert('Please enter a title');
       return;
     }
     if (advanceNotices.length === 0) {
-      Alert.alert('알림 시점을 하나 이상 선택해주세요');
+      Alert.alert('Please select at least one alert time');
       return;
     }
     if (triggerAt <= Date.now()) {
-      Alert.alert('미래의 시간을 선택해주세요');
+      Alert.alert('Please select a future time');
       return;
     }
     setLoading(true);
     try {
       const granted = await requestNotificationPermission();
       if (!granted && Platform.OS !== 'web') {
-        Alert.alert('알림 권한 필요', '설정에서 알림 권한을 허용해주세요.');
+        Alert.alert('Permission required', 'Please enable notifications in Settings.');
         setLoading(false);
         return;
       }
-      await create({ title: title.trim(), body: body.trim() || undefined, triggerAt, repeatRule, advanceNotices, sound });
+      await create({
+        title: title.trim(),
+        body: body.trim() || undefined,
+        triggerAt,
+        repeatRule,
+        advanceNotices,
+        sound: 'default',
+      });
       if (Platform.OS !== 'web') {
         const Haptics = require('expo-haptics');
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
       router.back();
     } catch {
-      Alert.alert('저장 중 오류가 발생했어요. 다시 시도해주세요.');
+      Alert.alert('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [title, body, triggerAt, repeatRule, advanceNotices, sound, create]);
+  }, [title, body, triggerAt, repeatRule, advanceNotices, create]);
 
   const pickerDate = new Date(triggerAt);
   const webInputStyle = {
@@ -134,10 +140,10 @@ export default function NewReminderScreen() {
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Text variant="body" color="secondary">취소</Text>
+            <Text variant="body" color="secondary">Cancel</Text>
           </TouchableOpacity>
-          <Text variant="heading" weight="semibold">새 알림</Text>
-          <View style={{ width: 40 }} />
+          <Text variant="heading" weight="semibold">New Reminder</Text>
+          <View style={{ width: 52 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -185,7 +191,7 @@ export default function NewReminderScreen() {
             <TextInput
               value={title}
               onChangeText={setTitle}
-              placeholder="무엇을 잊으면 안 되나요?"
+              placeholder="What can't you miss?"
               placeholderTextColor={theme.textTertiary}
               style={[styles.titleInput, { color: theme.textPrimary, borderBottomColor: theme.border }]}
               maxLength={100}
@@ -197,7 +203,7 @@ export default function NewReminderScreen() {
             <TextInput
               value={body}
               onChangeText={setBody}
-              placeholder="메모 (선택)"
+              placeholder="Note (optional)"
               placeholderTextColor={theme.textTertiary}
               style={[
                 styles.bodyInput,
@@ -209,10 +215,10 @@ export default function NewReminderScreen() {
               textAlignVertical="top"
             />
 
-            {/* 알림 시점 */}
+            {/* Alert Time */}
             <View style={styles.section}>
               <Text variant="caption" weight="semibold" color="secondary" style={styles.sectionLabel}>
-                🔔 알림 시점
+                🔔 Alert Time
               </Text>
               <View style={styles.chipGrid}>
                 {NOTICE_OPTIONS.map((opt) => {
@@ -243,45 +249,10 @@ export default function NewReminderScreen() {
               </View>
             </View>
 
-            {/* 소리 */}
+            {/* Repeat */}
             <View style={styles.section}>
               <Text variant="caption" weight="semibold" color="secondary" style={styles.sectionLabel}>
-                🔊 소리
-              </Text>
-              <View style={styles.soundRow}>
-                {SOUND_OPTIONS.map((opt) => {
-                  const selected = sound === opt.value;
-                  return (
-                    <TouchableOpacity
-                      key={opt.value}
-                      onPress={() => setSound(opt.value)}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.soundChip,
-                        {
-                          backgroundColor: selected ? theme.accent + '22' : theme.surfaceMuted,
-                          borderColor: selected ? theme.accent : theme.border,
-                        },
-                      ]}
-                    >
-                      <Text style={styles.soundEmoji}>{opt.emoji}</Text>
-                      <Text
-                        variant="caption"
-                        weight={selected ? 'semibold' : 'regular'}
-                        style={{ color: selected ? theme.accent : theme.textSecondary }}
-                      >
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* 반복 */}
-            <View style={styles.section}>
-              <Text variant="caption" weight="semibold" color="secondary" style={styles.sectionLabel}>
-                🔁 반복
+                🔁 Repeat
               </Text>
               <View style={styles.repeatRow}>
                 {REPEAT_OPTIONS.map((opt) => {
@@ -315,7 +286,7 @@ export default function NewReminderScreen() {
 
         {/* Save */}
         <View style={[styles.footer, { borderTopColor: theme.border }]}>
-          <Button label="저장" onPress={handleSave} loading={loading} fullWidth size="lg" />
+          <Button label="Save" onPress={handleSave} loading={loading} fullWidth size="lg" />
         </View>
 
         {/* Native pickers */}
@@ -415,17 +386,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     borderWidth: 1,
   },
-  soundRow: { flexDirection: 'row', gap: Spacing.sm },
-  soundChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-  },
-  soundEmoji: { fontSize: 14 },
   repeatRow: { flexDirection: 'row', gap: Spacing.sm, flexWrap: 'wrap' },
   repeatChip: {
     paddingHorizontal: Spacing.md,

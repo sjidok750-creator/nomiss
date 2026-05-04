@@ -5,55 +5,66 @@ import {
   StyleSheet,
   TouchableOpacity,
   useColorScheme,
+  Platform,
 } from 'react-native';
 import { PanResponder } from 'react-native';
 import { lightTheme, darkTheme } from '../../design/theme';
-import { Spacing, Radius } from '../../design/tokens';
+import { Spacing, Radius, Colors } from '../../design/tokens';
 import { Text } from '../ui/Text';
 import { ReminderCard } from './ReminderCard';
 import { Reminder } from '../../types/reminder';
 
-const SWIPE_THRESHOLD = 80;
-const DELETE_WIDTH = 80;
+const ACTION_WIDTH = 160; // 2 buttons × 80px
+const SWIPE_THRESHOLD = 40;
 
 interface Props {
   reminder: Reminder;
   onPress: () => void;
+  onEdit: () => void;
   onDelete: () => void;
-  selected?: boolean;
 }
 
-export function SwipeableReminderCard({ reminder, onPress, onDelete, selected }: Props) {
+export function SwipeableReminderCard({ reminder, onPress, onEdit, onDelete }: Props) {
   const scheme = useColorScheme();
   const theme = scheme === 'dark' ? darkTheme : lightTheme;
   const translateX = useRef(new Animated.Value(0)).current;
   const isOpen = useRef(false);
 
   const close = () => {
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, tension: 80, friction: 10 }).start();
+    Animated.spring(translateX, {
+      toValue: 0,
+      useNativeDriver: Platform.OS !== 'web',
+      tension: 80,
+      friction: 10,
+    }).start();
     isOpen.current = false;
   };
 
   const open = () => {
-    Animated.spring(translateX, { toValue: -DELETE_WIDTH, useNativeDriver: true, tension: 80, friction: 10 }).start();
+    Animated.spring(translateX, {
+      toValue: -ACTION_WIDTH,
+      useNativeDriver: Platform.OS !== 'web',
+      tension: 80,
+      friction: 10,
+    }).start();
     isOpen.current = true;
   };
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) =>
-        Math.abs(gestureState.dx) > 8 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
-      onPanResponderMove: (_, gestureState) => {
-        const x = isOpen.current ? -DELETE_WIDTH + gestureState.dx : gestureState.dx;
-        if (x <= 0 && x >= -DELETE_WIDTH - 20) {
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderMove: (_, g) => {
+        const base = isOpen.current ? -ACTION_WIDTH : 0;
+        const x = base + g.dx;
+        if (x <= 0 && x >= -ACTION_WIDTH - 20) {
           translateX.setValue(x);
         }
       },
-      onPanResponderRelease: (_, gestureState) => {
-        const currentX = isOpen.current
-          ? -DELETE_WIDTH + gestureState.dx
-          : gestureState.dx;
-        if (currentX < -SWIPE_THRESHOLD) {
+      onPanResponderRelease: (_, g) => {
+        const base = isOpen.current ? -ACTION_WIDTH : 0;
+        const x = base + g.dx;
+        if (x < -SWIPE_THRESHOLD) {
           open();
         } else {
           close();
@@ -62,7 +73,7 @@ export function SwipeableReminderCard({ reminder, onPress, onDelete, selected }:
     }),
   ).current;
 
-  const handlePress = () => {
+  const handleCardPress = () => {
     if (isOpen.current) {
       close();
     } else {
@@ -72,28 +83,32 @@ export function SwipeableReminderCard({ reminder, onPress, onDelete, selected }:
 
   return (
     <View style={styles.wrapper}>
-      {/* Delete action revealed on swipe */}
-      <View style={[styles.deleteAction, { backgroundColor: theme.dangerLight }]}>
+      {/* Action buttons (revealed on swipe left) */}
+      <View style={styles.actions}>
         <TouchableOpacity
-          onPress={() => { close(); onDelete(); }}
-          style={styles.deleteButton}
+          onPress={() => { close(); onEdit(); }}
+          style={[styles.actionBtn, { backgroundColor: '#3B82F6' }]}
           activeOpacity={0.8}
         >
-          <Text style={styles.deleteIcon}>🗑</Text>
-          <Text variant="tiny" weight="semibold" color="danger">삭제</Text>
+          <Text style={styles.actionIcon}>✏️</Text>
+          <Text variant="tiny" weight="semibold" style={styles.actionLabel}>Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => { close(); onDelete(); }}
+          style={[styles.actionBtn, { backgroundColor: Colors.danger }]}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.actionIcon}>🗑</Text>
+          <Text variant="tiny" weight="semibold" style={styles.actionLabel}>Delete</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Card */}
+      {/* Sliding card */}
       <Animated.View
         style={[styles.card, { transform: [{ translateX }] }]}
         {...panResponder.panHandlers}
       >
-        <ReminderCard
-          reminder={reminder}
-          onPress={handlePress}
-          selected={selected}
-        />
+        <ReminderCard reminder={reminder} onPress={handleCardPress} />
       </Animated.View>
     </View>
   );
@@ -103,23 +118,25 @@ const styles = StyleSheet.create({
   wrapper: {
     position: 'relative',
     marginBottom: Spacing.md,
+    overflow: 'hidden',
+    borderRadius: Radius.lg,
   },
-  deleteAction: {
+  actions: {
     position: 'absolute',
     right: 0,
     top: 0,
-    bottom: Spacing.md,
-    width: DELETE_WIDTH,
-    borderRadius: Radius.lg,
+    bottom: 0,
+    width: ACTION_WIDTH,
+    flexDirection: 'row',
+  },
+  actionBtn: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
   },
-  deleteButton: {
-    alignItems: 'center',
-    gap: 2,
-    padding: Spacing.sm,
-  },
-  deleteIcon: { fontSize: 20 },
+  actionIcon: { fontSize: 18 },
+  actionLabel: { color: '#fff' },
   card: {
     marginBottom: 0,
   },

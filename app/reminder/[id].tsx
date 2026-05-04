@@ -18,16 +18,10 @@ import { Button } from '../../src/components/ui/Button';
 import { Text } from '../../src/components/ui/Text';
 import { lightTheme, darkTheme } from '../../src/design/theme';
 import { Spacing, Radius, FontSize, FontWeight } from '../../src/design/tokens';
-import {
-  RepeatRule,
-  NoticeType,
-  SoundOption,
-  NOTICE_OPTIONS,
-  SOUND_OPTIONS,
-} from '../../src/types/reminder';
+import { RepeatRule, NoticeType, NOTICE_OPTIONS } from '../../src/types/reminder';
 import { formatTime, formatDate } from '../../src/lib/time';
 
-// ─── Web date/time helpers ───────────────────────────────────
+// ─── Web date/time helpers ────────────────────────────────────
 function toDateStr(ts: number) {
   const d = new Date(ts);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -50,30 +44,30 @@ function applyTimeStr(timeStr: string, ts: number): number {
 }
 
 const REPEAT_OPTIONS: { label: string; value: RepeatRule }[] = [
-  { label: '안 함', value: 'none' },
-  { label: '매일', value: 'daily' },
-  { label: '매주', value: 'weekly' },
-  { label: '매월', value: 'monthly' },
+  { label: 'Never', value: 'none' },
+  { label: 'Daily', value: 'daily' },
+  { label: 'Weekly', value: 'weekly' },
+  { label: 'Monthly', value: 'monthly' },
 ];
 
 const REPEAT_LABEL: Record<string, string> = {
-  none: '반복 없음',
-  daily: '매일',
-  weekly: '매주',
-  monthly: '매월',
+  none: 'No repeat',
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
 };
 
 export default function ReminderDetailScreen() {
   const scheme = useColorScheme();
   const theme = scheme === 'dark' ? darkTheme : lightTheme;
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, edit } = useLocalSearchParams<{ id: string; edit?: string }>();
   const reminders = useReminderStore((s) => s.reminders);
   const update = useReminderStore((s) => s.update);
   const remove = useReminderStore((s) => s.remove);
 
   const reminder = reminders.find((r) => r.id === id);
 
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(edit === '1');
   const [title, setTitle] = useState(reminder?.title ?? '');
   const [body, setBody] = useState(reminder?.body ?? '');
   const [triggerAt, setTriggerAt] = useState(reminder?.triggerAt ?? Date.now());
@@ -81,7 +75,6 @@ export default function ReminderDetailScreen() {
   const [advanceNotices, setAdvanceNotices] = useState<NoticeType[]>(
     reminder?.advanceNotices ?? ['at_time'],
   );
-  const [sound, setSound] = useState<SoundOption>(reminder?.sound ?? 'default');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -96,8 +89,8 @@ export default function ReminderDetailScreen() {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.surface }]}>
         <View style={styles.center}>
-          <Text variant="body" color="secondary">알림을 찾을 수 없어요</Text>
-          <Button label="닫기" onPress={() => router.back()} variant="ghost" size="md" />
+          <Text variant="body" color="secondary">Reminder not found</Text>
+          <Button label="Close" onPress={() => router.back()} variant="ghost" size="md" />
         </View>
       </SafeAreaView>
     );
@@ -119,14 +112,13 @@ export default function ReminderDetailScreen() {
     setTriggerAt(reminder.triggerAt);
     setRepeatRule(reminder.repeatRule);
     setAdvanceNotices(reminder.advanceNotices ?? ['at_time']);
-    setSound(reminder.sound ?? 'default');
     setEditing(true);
   };
 
   const handleSave = useCallback(async () => {
-    if (!title.trim()) { Alert.alert('제목을 입력해주세요'); return; }
-    if (advanceNotices.length === 0) { Alert.alert('알림 시점을 하나 이상 선택해주세요'); return; }
-    if (triggerAt <= Date.now()) { Alert.alert('미래의 시간을 선택해주세요'); return; }
+    if (!title.trim()) { Alert.alert('Please enter a title'); return; }
+    if (advanceNotices.length === 0) { Alert.alert('Please select at least one alert time'); return; }
+    if (triggerAt <= Date.now()) { Alert.alert('Please select a future time'); return; }
     setSaving(true);
     try {
       await update(reminder.id, {
@@ -135,7 +127,7 @@ export default function ReminderDetailScreen() {
         triggerAt,
         repeatRule,
         advanceNotices,
-        sound,
+        sound: 'default',
       });
       if (Platform.OS !== 'web') {
         const Haptics = require('expo-haptics');
@@ -143,17 +135,17 @@ export default function ReminderDetailScreen() {
       }
       setEditing(false);
     } catch {
-      Alert.alert('저장 중 오류가 발생했어요. 다시 시도해주세요.');
+      Alert.alert('Something went wrong. Please try again.');
     } finally {
       setSaving(false);
     }
-  }, [title, body, triggerAt, repeatRule, advanceNotices, sound, reminder.id, update]);
+  }, [title, body, triggerAt, repeatRule, advanceNotices, reminder.id, update]);
 
   const handleDelete = useCallback(() => {
-    Alert.alert('알림 삭제', `"${reminder.title}" 알림을 삭제할까요?`, [
-      { text: '취소', style: 'cancel' },
+    Alert.alert('Delete Reminder', `Delete "${reminder.title}"?`, [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: '삭제',
+        text: 'Delete',
         style: 'destructive',
         onPress: async () => {
           setDeleting(true);
@@ -180,19 +172,19 @@ export default function ReminderDetailScreen() {
     cursor: 'pointer',
   } as any;
 
-  // ─── Edit Mode ───────────────────────────────────────────────
+  // ─── Edit Mode ────────────────────────────────────────────────
   if (editing) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.surface }]}>
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={[styles.header, { borderBottomColor: theme.border }]}>
             <TouchableOpacity onPress={() => setEditing(false)} hitSlop={12}>
-              <Text variant="body" color="secondary">취소</Text>
+              <Text variant="body" color="secondary">Cancel</Text>
             </TouchableOpacity>
-            <Text variant="heading" weight="semibold">알림 편집</Text>
+            <Text variant="heading" weight="semibold">Edit Reminder</Text>
             <TouchableOpacity onPress={handleSave} hitSlop={12} disabled={saving}>
               <Text variant="body" weight="semibold" color="accent">
-                {saving ? '저장 중…' : '저장'}
+                {saving ? 'Saving…' : 'Save'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -239,7 +231,7 @@ export default function ReminderDetailScreen() {
               <TextInput
                 value={title}
                 onChangeText={setTitle}
-                placeholder="무엇을 잊으면 안 되나요?"
+                placeholder="What can't you miss?"
                 placeholderTextColor={theme.textTertiary}
                 style={[styles.titleInput, { color: theme.textPrimary, borderBottomColor: theme.border }]}
                 maxLength={100}
@@ -248,7 +240,7 @@ export default function ReminderDetailScreen() {
               <TextInput
                 value={body}
                 onChangeText={setBody}
-                placeholder="메모 (선택)"
+                placeholder="Note (optional)"
                 placeholderTextColor={theme.textTertiary}
                 style={[styles.bodyInput, { color: theme.textPrimary, backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
                 maxLength={300}
@@ -257,10 +249,10 @@ export default function ReminderDetailScreen() {
                 textAlignVertical="top"
               />
 
-              {/* 알림 시점 */}
+              {/* Alert Time */}
               <View style={styles.section}>
                 <Text variant="caption" weight="semibold" color="secondary" style={styles.sectionLabel}>
-                  🔔 알림 시점
+                  🔔 Alert Time
                 </Text>
                 <View style={styles.chipGrid}>
                   {NOTICE_OPTIONS.map((opt) => {
@@ -291,45 +283,10 @@ export default function ReminderDetailScreen() {
                 </View>
               </View>
 
-              {/* 소리 */}
+              {/* Repeat */}
               <View style={styles.section}>
                 <Text variant="caption" weight="semibold" color="secondary" style={styles.sectionLabel}>
-                  🔊 소리
-                </Text>
-                <View style={styles.soundRow}>
-                  {SOUND_OPTIONS.map((opt) => {
-                    const selected = sound === opt.value;
-                    return (
-                      <TouchableOpacity
-                        key={opt.value}
-                        onPress={() => setSound(opt.value)}
-                        activeOpacity={0.7}
-                        style={[
-                          styles.soundChip,
-                          {
-                            backgroundColor: selected ? theme.accent + '22' : theme.surfaceMuted,
-                            borderColor: selected ? theme.accent : theme.border,
-                          },
-                        ]}
-                      >
-                        <Text style={styles.soundEmoji}>{opt.emoji}</Text>
-                        <Text
-                          variant="caption"
-                          weight={selected ? 'semibold' : 'regular'}
-                          style={{ color: selected ? theme.accent : theme.textSecondary }}
-                        >
-                          {opt.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* 반복 */}
-              <View style={styles.section}>
-                <Text variant="caption" weight="semibold" color="secondary" style={styles.sectionLabel}>
-                  🔁 반복
+                  🔁 Repeat
                 </Text>
                 <View style={styles.repeatRow}>
                   {REPEAT_OPTIONS.map((opt) => {
@@ -393,7 +350,7 @@ export default function ReminderDetailScreen() {
     );
   }
 
-  // ─── View Mode ───────────────────────────────────────────────
+  // ─── View Mode ────────────────────────────────────────────────
   const noticeLabels = (reminder.advanceNotices ?? ['at_time'])
     .map((n) => NOTICE_OPTIONS.find((o) => o.value === n)?.label ?? n)
     .join(' · ');
@@ -402,12 +359,12 @@ export default function ReminderDetailScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.surface }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Text variant="body" color="secondary">닫기</Text>
+          <Text variant="body" color="secondary">Close</Text>
         </TouchableOpacity>
-        <Text variant="heading" weight="semibold">알림 상세</Text>
+        <Text variant="heading" weight="semibold">Reminder</Text>
         {isEditable ? (
           <TouchableOpacity onPress={handleStartEdit} hitSlop={12}>
-            <Text variant="body" weight="semibold" color="accent">편집</Text>
+            <Text variant="body" weight="semibold" color="accent">Edit</Text>
           </TouchableOpacity>
         ) : (
           <View style={{ width: 40 }} />
@@ -418,7 +375,7 @@ export default function ReminderDetailScreen() {
         {(isFired || isCancelled) && (
           <View style={[styles.statusBadge, { backgroundColor: theme.surfaceMuted }]}>
             <Text variant="caption" color="tertiary" weight="medium">
-              {isFired ? '✓ 알림 완료' : '취소됨'}
+              {isFired ? '✓ Completed' : 'Cancelled'}
             </Text>
           </View>
         )}
@@ -449,17 +406,11 @@ export default function ReminderDetailScreen() {
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
           <View style={styles.metaRow}>
-            <Text variant="caption" color="tertiary">🔔 알림 시점</Text>
+            <Text variant="caption" color="tertiary">🔔 Alert Time</Text>
             <Text variant="caption" weight="medium" color="secondary">{noticeLabels}</Text>
           </View>
           <View style={styles.metaRow}>
-            <Text variant="caption" color="tertiary">🔊 소리</Text>
-            <Text variant="caption" weight="medium" color="secondary">
-              {SOUND_OPTIONS.find((o) => o.value === (reminder.sound ?? 'default'))?.label}
-            </Text>
-          </View>
-          <View style={styles.metaRow}>
-            <Text variant="caption" color="tertiary">🔁 반복</Text>
+            <Text variant="caption" color="tertiary">🔁 Repeat</Text>
             <Text variant="caption" weight="medium" color="secondary">
               {REPEAT_LABEL[reminder.repeatRule]}
             </Text>
@@ -470,7 +421,7 @@ export default function ReminderDetailScreen() {
       {isEditable && (
         <View style={[styles.footer, { borderTopColor: theme.border }]}>
           <Button
-            label="삭제"
+            label="Delete"
             variant="destructive"
             onPress={handleDelete}
             loading={deleting}
@@ -537,17 +488,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     borderWidth: 1,
   },
-  soundRow: { flexDirection: 'row', gap: Spacing.sm },
-  soundChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-  },
-  soundEmoji: { fontSize: 14 },
   repeatRow: { flexDirection: 'row', gap: Spacing.sm, flexWrap: 'wrap' },
   repeatChip: {
     paddingHorizontal: Spacing.md,

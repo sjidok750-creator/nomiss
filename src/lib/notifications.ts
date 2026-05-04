@@ -62,7 +62,7 @@ function calcNoticeTime(triggerAt: number, notice: NoticeType): number {
 export async function scheduleAllNotifications(reminder: Reminder): Promise<void> {
   if (Platform.OS === 'web') return;
 
-  const sound: string | undefined = reminder.sound === 'silent' ? undefined : 'default';
+  const sound: boolean | undefined = reminder.sound === 'silent' ? undefined : true;
 
   for (const notice of reminder.advanceNotices) {
     const noticeTime = calcNoticeTime(reminder.triggerAt, notice);
