@@ -16,11 +16,12 @@ import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useReminderStore } from '../../src/features/reminders/store';
 import { QuickTimeChips } from '../../src/components/form/QuickTimeChips';
+import { CategoryPicker } from '../../src/components/form/CategoryPicker';
 import { Button } from '../../src/components/ui/Button';
 import { Text } from '../../src/components/ui/Text';
 import { lightTheme, darkTheme } from '../../src/design/theme';
 import { Spacing, Radius, FontSize, FontWeight } from '../../src/design/tokens';
-import { RepeatRule } from '../../src/types/reminder';
+import { RepeatRule, CategoryId, getCategoryById } from '../../src/types/reminder';
 import { formatTime, formatDate } from '../../src/lib/time';
 
 const REPEAT_OPTIONS: { label: string; value: RepeatRule }[] = [
@@ -52,6 +53,7 @@ export default function ReminderDetailScreen() {
   const [body, setBody] = useState(reminder?.body ?? '');
   const [triggerAt, setTriggerAt] = useState(reminder?.triggerAt ?? Date.now());
   const [repeatRule, setRepeatRule] = useState<RepeatRule>(reminder?.repeatRule ?? 'none');
+  const [categoryId, setCategoryId] = useState<CategoryId>(reminder?.categoryId ?? 'default');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -77,6 +79,7 @@ export default function ReminderDetailScreen() {
     setBody(reminder.body ?? '');
     setTriggerAt(reminder.triggerAt);
     setRepeatRule(reminder.repeatRule);
+    setCategoryId(reminder.categoryId ?? 'default');
     setEditing(true);
   };
 
@@ -98,6 +101,7 @@ export default function ReminderDetailScreen() {
         body: body.trim() || undefined,
         triggerAt,
         repeatRule,
+        categoryId,
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setEditing(false);
@@ -190,6 +194,11 @@ export default function ReminderDetailScreen() {
                 numberOfLines={3}
                 textAlignVertical="top"
               />
+              <View style={styles.repeatSection}>
+                <Text variant="caption" weight="semibold" color="secondary">카테고리</Text>
+                <CategoryPicker selected={categoryId} onSelect={setCategoryId} />
+              </View>
+
               <View style={styles.repeatSection}>
                 <Text variant="caption" weight="semibold" color="secondary">반복</Text>
                 <View style={styles.repeatRow}>
@@ -304,6 +313,18 @@ export default function ReminderDetailScreen() {
             </Text>
           ) : null}
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          {(() => {
+            const cat = getCategoryById(reminder.categoryId ?? 'default');
+            return (
+              <View style={styles.metaRow}>
+                <Text variant="caption" color="tertiary">카테고리</Text>
+                <View style={[styles.catBadge, { backgroundColor: cat.color + '22' }]}>
+                  <Text style={{ fontSize: 12 }}>{cat.emoji}</Text>
+                  <Text variant="caption" weight="medium" style={{ color: cat.color }}>{cat.label}</Text>
+                </View>
+              </View>
+            );
+          })()}
           <View style={styles.metaRow}>
             <Text variant="caption" color="tertiary">반복</Text>
             <Text variant="caption" weight="medium" color="secondary">
@@ -355,6 +376,7 @@ const styles = StyleSheet.create({
   bodyText: { lineHeight: 22 },
   divider: { height: 1, marginVertical: Spacing.xs },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  catBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: Radius.pill },
   footer: { padding: Spacing.lg, borderTopWidth: 1 },
   firedText: { textDecorationLine: 'line-through', opacity: 0.5 },
   chipsSection: { paddingBottom: Spacing.xl },

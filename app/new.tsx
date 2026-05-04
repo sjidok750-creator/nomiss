@@ -17,11 +17,12 @@ import { router } from 'expo-router';
 import { useReminderStore } from '../src/features/reminders/store';
 import { requestNotificationPermission } from '../src/lib/notifications';
 import { QuickTimeChips } from '../src/components/form/QuickTimeChips';
+import { CategoryPicker } from '../src/components/form/CategoryPicker';
 import { Button } from '../src/components/ui/Button';
 import { Text } from '../src/components/ui/Text';
 import { lightTheme, darkTheme } from '../src/design/theme';
 import { Spacing, Radius, FontSize, FontWeight } from '../src/design/tokens';
-import { RepeatRule } from '../src/types/reminder';
+import { RepeatRule, CategoryId } from '../src/types/reminder';
 import { formatTime, formatDate } from '../src/lib/time';
 import { addMinutes } from 'date-fns';
 
@@ -41,6 +42,7 @@ export default function NewReminderScreen() {
   const [body, setBody] = useState('');
   const [triggerAt, setTriggerAt] = useState(() => addMinutes(Date.now(), 10).getTime());
   const [repeatRule, setRepeatRule] = useState<RepeatRule>('none');
+  const [categoryId, setCategoryId] = useState<CategoryId>('default');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -67,7 +69,7 @@ export default function NewReminderScreen() {
         return;
       }
 
-      await create({ title: title.trim(), body: body.trim() || undefined, triggerAt, repeatRule });
+      await create({ title: title.trim(), body: body.trim() || undefined, triggerAt, repeatRule, categoryId });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch {
@@ -153,6 +155,12 @@ export default function NewReminderScreen() {
               numberOfLines={3}
               textAlignVertical="top"
             />
+
+            {/* Category */}
+            <View style={styles.repeatSection}>
+              <Text variant="caption" weight="semibold" color="secondary">카테고리</Text>
+              <CategoryPicker selected={categoryId} onSelect={setCategoryId} />
+            </View>
 
             {/* Repeat */}
             <View style={styles.repeatSection}>

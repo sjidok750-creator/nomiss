@@ -2,8 +2,10 @@ import React, { useMemo, useState } from 'react';
 import {
   View,
   SectionList,
+  ScrollView,
   StyleSheet,
   TouchableOpacity,
+  TextInput,
   useColorScheme,
   Platform,
 } from 'react-native';
@@ -16,7 +18,7 @@ import { Text } from '../src/components/ui/Text';
 import { lightTheme, darkTheme, Theme } from '../src/design/theme';
 import { Spacing, Radius } from '../src/design/tokens';
 import { groupRemindersByDate } from '../src/lib/time';
-import { Reminder } from '../src/types/reminder';
+import { Reminder, CategoryId, CATEGORIES } from '../src/types/reminder';
 import { useResponsive } from '../src/design/responsive';
 import { ReminderDetailPane } from '../src/components/reminder/ReminderDetailPane';
 
@@ -29,13 +31,22 @@ export default function HomeScreen() {
   const remove = useReminderStore((s) => s.remove);
   const [filter, setFilter] = useState<Filter>('upcoming');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [activeCat, setActiveCat] = useState<CategoryId | 'all'>('all');
   const { showMasterDetail } = useResponsive();
 
   const filtered = useMemo(() => {
     const sorted = [...reminders].sort((a, b) => a.triggerAt - b.triggerAt);
-    if (filter === 'upcoming') return sorted.filter((r) => r.status === 'scheduled');
-    return sorted.filter((r) => r.status === 'fired' || r.status === 'cancelled').reverse();
-  }, [reminders, filter]);
+    let list = filter === 'upcoming'
+      ? sorted.filter((r) => r.status === 'scheduled')
+      : sorted.filter((r) => r.status === 'fired' || r.status === 'cancelled').reverse();
+    if (activeCat !== 'all') list = list.filter((r) => (r.categoryId ?? 'default') === activeCat);
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      list = list.filter((r) => r.title.toLowerCase().includes(q) || r.body?.toLowerCase().includes(q));
+    }
+    return list;
+  }, [reminders, filter, query, activeCat]);
 
   const sections = useMemo(() => groupRemindersByDate(filtered), [filtered]);
 
@@ -75,6 +86,10 @@ export default function HomeScreen() {
               handlePress={handlePress}
               selectedId={selectedId}
               handleDelete={handleDelete}
+              query={query}
+              setQuery={setQuery}
+              activeCat={activeCat}
+              setActiveCat={setActiveCat}
             />
           </View>
           {/* Detail (right panel) */}
@@ -108,6 +123,11 @@ export default function HomeScreen() {
         handleAdd={handleAdd}
         handlePress={handlePress}
         selectedId={null}
+        handleDelete={handleDelete}
+        query={query}
+        setQuery={setQuery}
+        activeCat={activeCat}
+        setActiveCat={setActiveCat}
       />
     </SafeAreaView>
   );
@@ -124,6 +144,10 @@ function MasterList({
   handlePress,
   selectedId,
   handleDelete,
+  query,
+  setQuery,
+  activeCat,
+  setActiveCat,
 }: {
   theme: Theme;
   filter: Filter;
@@ -134,6 +158,10 @@ function MasterList({
   handlePress: (r: Reminder) => void;
   selectedId: string | null;
   handleDelete?: (id: string) => void;
+  query: string;
+  setQuery: (q: string) => void;
+  activeCat: CategoryId | 'all';
+  setActiveCat: (c: CategoryId | 'all') => void;
 }) {
   return (
     <View style={styles.container}>
@@ -157,6 +185,52 @@ function MasterList({
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Search Bar */}
+      <View style={[styles.searchBar, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="알림 검색"
+          placeholderTextColor={theme.textTertiary}
+          style={[styles.searchInput, { color: theme.textPrimary }]}
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+        />
+        {query.length > 0 && (
+          <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
+            <Text style={styles.searchClear} color="tertiary">✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Category Filter */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catScrollOuter}>
+        {([{ id: 'all', label: '전체', emoji: '✨', color: theme.textSecondary }, ...CATEGORIES] as { id: string; label: string; emoji: string; color: string }[]).map((cat) => {
+          const isActive = activeCat === cat.id;
+          return (
+            <TouchableOpacity
+              key={cat.id}
+              onPress={() => setActiveCat(cat.id as CategoryId | 'all')}
+              activeOpacity={0.7}
+              style={[
+                styles.catChip,
+                {
+                  backgroundColor: isActive ? cat.color + '22' : theme.surfaceMuted,
+                  borderColor: isActive ? cat.color : theme.border,
+                  borderWidth: isActive ? 1.5 : 1,
+                },
+              ]}
+            >
+              <Text style={styles.catEmoji}>{cat.emoji}</Text>
+              <Text variant="tiny" weight={isActive ? 'semibold' : 'regular'} style={{ color: isActive ? cat.color : theme.textSecondary }}>
+                {cat.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
       {/* Filter Tabs */}
       <View style={[styles.filterRow, { borderBottomColor: theme.border }]}>
@@ -217,6 +291,35 @@ function MasterList({
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   container: { flex: 1 },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    gap: Spacing.sm,
+  },
+  searchIcon: { fontSize: 15 },
+  searchInput: { flex: 1, fontSize: 15, padding: 0 },
+  searchClear: { fontSize: 13 },
+  catScrollOuter: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.sm,
+    flexDirection: 'row',
+  },
+  catChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.pill,
+  },
+  catEmoji: { fontSize: 12 },
   masterDetail: { flex: 1, flexDirection: 'row' },
   master: { width: '35%', borderRightWidth: 1 },
   detail: { flex: 1 },

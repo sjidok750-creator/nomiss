@@ -1,14 +1,9 @@
 import React from 'react';
-import {
-  View,
-  TouchableOpacity,
-  StyleSheet,
-  useColorScheme,
-} from 'react-native';
+import { View, TouchableOpacity, StyleSheet, useColorScheme } from 'react-native';
 import { lightTheme, darkTheme } from '../../design/theme';
-import { Spacing, Radius, Colors } from '../../design/tokens';
+import { Spacing, Radius } from '../../design/tokens';
 import { Text } from '../ui/Text';
-import { Reminder } from '../../types/reminder';
+import { Reminder, getCategoryById } from '../../types/reminder';
 import { formatTime, formatDate } from '../../lib/time';
 
 interface Props {
@@ -22,6 +17,8 @@ export function ReminderCard({ reminder, onPress, onLongPress, selected = false 
   const scheme = useColorScheme();
   const theme = scheme === 'dark' ? darkTheme : lightTheme;
   const isFired = reminder.status === 'fired';
+  const category = getCategoryById(reminder.categoryId ?? 'default');
+  const barColor = isFired ? theme.border : category.color;
 
   return (
     <TouchableOpacity
@@ -30,11 +27,11 @@ export function ReminderCard({ reminder, onPress, onLongPress, selected = false 
       onLongPress={onLongPress}
       style={[
         styles.container,
-        { backgroundColor: theme.surfaceMuted, borderColor: selected ? theme.accent : theme.border },
+        { backgroundColor: theme.surfaceMuted, borderColor: selected ? category.color : theme.border },
         selected && { borderWidth: 2 },
       ]}
     >
-      <View style={[styles.accentBar, { backgroundColor: isFired ? theme.border : theme.accent }]} />
+      <View style={[styles.accentBar, { backgroundColor: barColor }]} />
       <View style={styles.content}>
         <Text
           variant="display"
@@ -59,14 +56,14 @@ export function ReminderCard({ reminder, onPress, onLongPress, selected = false 
           </Text>
         ) : null}
         <View style={styles.meta}>
-          <Text variant="tiny" color="tertiary">
-            {formatDate(reminder.triggerAt)}
-          </Text>
+          <Text variant="tiny" color="tertiary">{formatDate(reminder.triggerAt)}</Text>
+          <View style={[styles.categoryBadge, { backgroundColor: category.color + '22' }]}>
+            <Text style={styles.categoryEmoji}>{category.emoji}</Text>
+            <Text variant="tiny" style={{ color: category.color }}>{category.label}</Text>
+          </View>
           {reminder.repeatRule !== 'none' && (
             <View style={[styles.repeatBadge, { backgroundColor: theme.accentMuted }]}>
-              <Text variant="tiny" color="accent">
-                {repeatLabel(reminder.repeatRule)}
-              </Text>
+              <Text variant="tiny" color="accent">{REPEAT_LABEL[reminder.repeatRule]}</Text>
             </View>
           )}
         </View>
@@ -75,10 +72,7 @@ export function ReminderCard({ reminder, onPress, onLongPress, selected = false 
   );
 }
 
-function repeatLabel(rule: Reminder['repeatRule']): string {
-  const map = { daily: '매일', weekly: '매주', monthly: '매월', none: '' };
-  return map[rule];
-}
+const REPEAT_LABEL: Record<string, string> = { daily: '매일', weekly: '매주', monthly: '매월', none: '' };
 
 const styles = StyleSheet.create({
   container: {
@@ -88,34 +82,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: Spacing.md,
   },
-  accentBar: {
-    width: 4,
-  },
-  content: {
-    flex: 1,
-    padding: Spacing.lg,
-    gap: Spacing.xs,
-  },
-  time: {
-    fontSize: 40,
-    lineHeight: 48,
-  },
-  body: {
-    marginTop: Spacing.xs,
-  },
-  meta: {
+  accentBar: { width: 4 },
+  content: { flex: 1, padding: Spacing.lg, gap: Spacing.xs },
+  time: { fontSize: 40, lineHeight: 48 },
+  body: { marginTop: Spacing.xs },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.xs, flexWrap: 'wrap' },
+  categoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    marginTop: Spacing.xs,
-  },
-  repeatBadge: {
+    gap: 3,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
     borderRadius: Radius.pill,
   },
-  firedText: {
-    textDecorationLine: 'line-through',
-    opacity: 0.5,
-  },
+  categoryEmoji: { fontSize: 11 },
+  repeatBadge: { paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: Radius.pill },
+  firedText: { textDecorationLine: 'line-through', opacity: 0.5 },
 });

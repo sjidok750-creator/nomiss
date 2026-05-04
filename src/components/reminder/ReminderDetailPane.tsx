@@ -14,11 +14,12 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { useReminderStore } from '../../features/reminders/store';
 import { QuickTimeChips } from '../form/QuickTimeChips';
+import { CategoryPicker } from '../form/CategoryPicker';
 import { Button } from '../ui/Button';
 import { Text } from '../ui/Text';
 import { lightTheme, darkTheme } from '../../design/theme';
 import { Spacing, Radius, FontSize, FontWeight } from '../../design/tokens';
-import { RepeatRule, Reminder } from '../../types/reminder';
+import { RepeatRule, CategoryId, Reminder, getCategoryById } from '../../types/reminder';
 import { formatTime, formatDate } from '../../lib/time';
 
 const REPEAT_OPTIONS: { label: string; value: RepeatRule }[] = [
@@ -48,6 +49,7 @@ export function ReminderDetailPane({ reminder, onClose }: Props) {
   const [body, setBody] = useState(reminder.body ?? '');
   const [triggerAt, setTriggerAt] = useState(reminder.triggerAt);
   const [repeatRule, setRepeatRule] = useState<RepeatRule>(reminder.repeatRule);
+  const [categoryId, setCategoryId] = useState<CategoryId>(reminder.categoryId ?? 'default');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -70,7 +72,7 @@ export function ReminderDetailPane({ reminder, onClose }: Props) {
     if (triggerAt <= Date.now()) { Alert.alert('미래의 시간을 선택해주세요'); return; }
     setSaving(true);
     try {
-      await update(reminder.id, { title: title.trim(), body: body.trim() || undefined, triggerAt, repeatRule });
+      await update(reminder.id, { title: title.trim(), body: body.trim() || undefined, triggerAt, repeatRule, categoryId });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setEditing(false);
     } catch {
@@ -146,6 +148,11 @@ export function ReminderDetailPane({ reminder, onClose }: Props) {
               textAlignVertical="top"
             />
             <View style={styles.repeatSection}>
+              <Text variant="caption" weight="semibold" color="secondary">카테고리</Text>
+              <CategoryPicker selected={categoryId} onSelect={setCategoryId} />
+            </View>
+
+            <View style={styles.repeatSection}>
               <Text variant="caption" weight="semibold" color="secondary">반복</Text>
               <View style={styles.repeatRow}>
                 {REPEAT_OPTIONS.map((opt) => (
@@ -177,6 +184,8 @@ export function ReminderDetailPane({ reminder, onClose }: Props) {
       </KeyboardAvoidingView>
     );
   }
+
+  const category = getCategoryById(reminder.categoryId ?? 'default');
 
   return (
     <View style={styles.flex}>
@@ -216,6 +225,13 @@ export function ReminderDetailPane({ reminder, onClose }: Props) {
           ) : null}
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <View style={styles.metaRow}>
+            <Text variant="caption" color="tertiary">카테고리</Text>
+            <View style={[styles.catBadge, { backgroundColor: category.color + '22' }]}>
+              <Text style={{ fontSize: 12 }}>{category.emoji}</Text>
+              <Text variant="caption" weight="medium" style={{ color: category.color }}>{category.label}</Text>
+            </View>
+          </View>
+          <View style={styles.metaRow}>
             <Text variant="caption" color="tertiary">반복</Text>
             <Text variant="caption" weight="medium" color="secondary">{REPEAT_LABEL[reminder.repeatRule]}</Text>
           </View>
@@ -242,6 +258,7 @@ const styles = StyleSheet.create({
   bodyText: { lineHeight: 22 },
   divider: { height: 1, marginVertical: Spacing.xs },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  catBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: Radius.pill },
   footer: { padding: Spacing.lg, borderTopWidth: 1 },
   firedText: { textDecorationLine: 'line-through', opacity: 0.5 },
   chipsSection: { paddingBottom: Spacing.xl },
