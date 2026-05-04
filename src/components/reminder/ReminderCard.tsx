@@ -9,6 +9,7 @@ import { formatTime, formatDate } from '../../lib/time';
 interface Props {
   reminder: Reminder;
   onPress: () => void;
+  noMargin?: boolean;
 }
 
 const REPEAT_LABEL: Record<string, string> = {
@@ -18,7 +19,7 @@ const REPEAT_LABEL: Record<string, string> = {
   none: '',
 };
 
-export function ReminderCard({ reminder, onPress }: Props) {
+export function ReminderCard({ reminder, onPress, noMargin }: Props) {
   const scheme = useColorScheme();
   const theme = scheme === 'dark' ? darkTheme : lightTheme;
   const isFired = reminder.status === 'fired';
@@ -30,6 +31,7 @@ export function ReminderCard({ reminder, onPress }: Props) {
       style={[
         styles.container,
         { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+        noMargin && styles.noMargin,
       ]}
     >
       <View style={[styles.accentBar, { backgroundColor: isFired ? theme.border : Colors.accent }]} />
@@ -96,5 +98,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: Radius.pill,
   },
+  noMargin: { marginBottom: 0 },
   firedText: { textDecorationLine: 'line-through', opacity: 0.5 },
 });

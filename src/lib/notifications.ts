@@ -128,13 +128,16 @@ function buildTrigger(
   repeatRule: RepeatRule,
 ): Notifications.NotificationTriggerInput {
   const date = new Date(triggerAt);
+  // Android requires channelId in the trigger to use the correct sound channel
+  const channelId = Platform.OS === 'android' ? 'default' : undefined;
 
   if (repeatRule === 'daily') {
     return {
       type: Notifications.SchedulableTriggerInputTypes.DAILY,
       hour: date.getHours(),
       minute: date.getMinutes(),
-    };
+      channelId,
+    } as Notifications.NotificationTriggerInput;
   }
   if (repeatRule === 'weekly') {
     return {
@@ -142,7 +145,8 @@ function buildTrigger(
       weekday: date.getDay() + 1,
       hour: date.getHours(),
       minute: date.getMinutes(),
-    };
+      channelId,
+    } as Notifications.NotificationTriggerInput;
   }
   if (repeatRule === 'monthly') {
     return {
@@ -150,7 +154,12 @@ function buildTrigger(
       day: date.getDate(),
       hour: date.getHours(),
       minute: date.getMinutes(),
-    };
+      channelId,
+    } as Notifications.NotificationTriggerInput;
   }
-  return { type: Notifications.SchedulableTriggerInputTypes.DATE, date };
+  return {
+    type: Notifications.SchedulableTriggerInputTypes.DATE,
+    date,
+    channelId,
+  } as Notifications.NotificationTriggerInput;
 }
