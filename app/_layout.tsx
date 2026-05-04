@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,7 +10,9 @@ import { useReminderStore } from '../src/features/reminders/store';
 import { ONBOARDING_KEY } from './onboarding';
 import 'react-native-reanimated';
 
-SplashScreen.preventAutoHideAsync();
+if (Platform.OS !== 'web') {
+  SplashScreen.preventAutoHideAsync();
+}
 
 export default function RootLayout() {
   const scheme = useColorScheme();
@@ -19,13 +21,18 @@ export default function RootLayout() {
 
   useEffect(() => {
     async function init() {
-      await setupNotificationChannel();
-      await load();
-      const done = await AsyncStorage.getItem(ONBOARDING_KEY);
-      await SplashScreen.hideAsync();
-      setReady(true);
-      if (!done) {
-        router.replace('/onboarding');
+      try {
+        await setupNotificationChannel();
+        await load();
+        const done = await AsyncStorage.getItem(ONBOARDING_KEY);
+        if (Platform.OS !== 'web') {
+          await SplashScreen.hideAsync();
+        }
+        if (!done) {
+          router.replace('/onboarding');
+        }
+      } finally {
+        setReady(true);
       }
     }
     init();
